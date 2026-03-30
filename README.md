@@ -3,7 +3,7 @@
 </p>
 
 <h2 align="center">
-  <a href="https://github.com/HITsz-TMG/AIGC-Claw">AIGC-Claw: AI 创意视频生成员工</a>
+  AIGC-Claw: AI 创意视频生成员工
 </h2>
 
 <h4 align="center">
@@ -24,12 +24,12 @@
 </h4>
 
 <p align="center">
-  <b>Chat an Idea. Get a Video. 全自动 6 阶段 AI 视频生成系统</b>
+  <b><i><font size="5">直接与 <a href="#方式二openclaw-自动配置">OpenClaw</a> 对话："研究 X" → 搞定。</font></i></b>
 </p>
 
 <div align="center">
 
-🎬  [**视频演示**](https://www.youtube.com/@imryanxu)  📖  [**集成指南**](#-快速开始)  🦀  [**ClawHub**](https://clawhub.ai/hit-cxf/aigc-director)
+🎬  [**视频演示**](https://www.youtube.com/@imryanxu)  📖  [**集成指南**](#方式二openclaw-自动配置)  🦀  [**ClawHub**](https://clawhub.ai/hit-cxf/aigc-director)
 
 <a href="https://trendshift.io/repositories/12871" target="_blank"><img src="https://trendshift.io/api/badge/repositories/12871" alt="HITsz-TMG%2FFilmAgent | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
@@ -247,6 +247,10 @@ DEEPSEEK_API_KEY=your_key
 
 | 框架图 | 论文信息 |
 |:---:|---|
-| <img src="https://github.com/HITsz-TMG/FilmAgent/blob/main/pics/framework.png?raw=true" width="420" alt="FilmAgent framework"/> | **FilmAgent: Automating Virtual Film Production Through a Multi-Agent Collaborative Framework**<br>[Paper](https://doi.org/10.1145/3681758.3698014) [GitHub](https://github.com/HITsz-TMG/AIGC-Claw/blob/main/FilmAgent.md) |
-| <img src="https://github.com/HITsz-TMG/Anim-Director/blob/main/Anim-Director/assets/demos/Tim/AnimDirector%28Ours%29/Scene_1_Segment_1.jpg?raw=true" width="420" alt="Anim-Director result"/> | **Anim-Director: A Large Multimodal Model Powered Agent for Controllable Animation Video Generation**<br>[Paper](https://doi.org/10.1145/3680528.3687688) [GitHub](https://github.com/HITsz-TMG/Anim-Director/tree/main/Anim-Director) |
-| <img src="https://raw.githubusercontent.com/HITsz-TMG/Anim-Director/main/AniMaker/assets/pipeline.png" width="420" alt="AniMaker pipeline"/> | **AniMaker: Multi-Agent Animated Storytelling with MCTS-Driven Clip Generation**<br>[Paper](https://doi.org/10.1145/3757377.3764009) [GitHub](https://github.com/HITsz-TMG/Anim-Director/tree/main/AniMaker) |
+| <img src="https://github.com/HITsz-TMG/FilmAgent/blob/main/pics/framework.png?raw=true" width="420" alt="FilmAgent framework"/> | **FilmAgent: Automating Virtual Film Production Through a Multi-Agent Collaborative Framework**<br>Authors: Xu, Zhenran; Wang, Jifang; Wang, Longyue; Li, Zhouyi; Shi, Senbao; Hu, Baotian; Zhang, Min<br>[[Paper](https://doi.org/10.1145/3681758.3698014)] [[GitHub](https://github.com/HITsz-TMG/AIGC-Claw/blob/main/FilmAgent.md)] |
+| <img src="https://github.com/HITsz-TMG/Anim-Director/blob/main/Anim-Director/assets/visualeg.png" width="420" alt="Anim-Director result"/> | **Anim-Director: A Large Multimodal Model Powered Agent for Controllable Animation Video Generation**<br>Authors: Li, Yunxin; Shi, Haoyuan; Hu, Baotian; Wang, Longyue; Zhu, Jiashun; Xu, Jinyi; Zhao, Zhen; Zhang, Min<br>[[Paper](https://doi.org/10.1145/3680528.3687688)] [[GitHub](https://github.com/HITsz-TMG/Anim-Director/tree/main/Anim-Director)] |
+| <img src="https://raw.githubusercontent.com/HITsz-TMG/Anim-Director/main/AniMaker/assets/pipeline.png" width="420" alt="AniMaker pipeline"/> | **AniMaker: Multi-Agent Animated Storytelling with MCTS-Driven Clip Generation**<br>Authors: Shi, Haoyuan; Li, Yunxin; Chen, Xinyu; Wang, Longyue; Hu, Baotian; Zhang, Min<br>[[Paper](https://doi.org/10.1145/3757377.3764009)] [[GitHub](https://github.com/HITsz-TMG/Anim-Director/tree/main/AniMaker)] |
+
+<p align="center">
+  <sub>Built with 🦞 by the HITsz-TMG team</sub>
+</p>
