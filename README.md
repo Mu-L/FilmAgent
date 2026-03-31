@@ -29,19 +29,17 @@
 
 <div align="center">
 
-📺 [**Bilibili**](https://www.youtube.com/@imryanxu)  ▶️ [**YouTube**](https://www.youtube.com/@imryanxu)  📖 [**集成指南**](#方式二openclaw-自动配置)  🦀 [**ClawHub**](https://clawhub.ai/hit-cxf/aigc-director)
+📺 [**Bilibili**](https://www.youtube.com/@imryanxu)  ▶️ [**YouTube**](https://www.youtube.com/@imryanxu)  📖 [**集成指南**](https://github.com/HITsz-TMG/AIGC-Claw?tab=readme-ov-file#%E6%96%B9%E5%BC%8F%E4%BA%8Copenclaw-%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE)  🦀 [**ClawHub**](https://clawhub.ai/hit-cxf/aigc-director)
 
 <a href="https://trendshift.io/repositories/12871" target="_blank"><img src="https://trendshift.io/api/badge/repositories/12871" alt="HITsz-TMG%2FFilmAgent | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 </div>
 
----
 
 ## 💥 News
 
 - `2026/3/27`: 🚀 AIGC-Claw 正式发布，支持视频生成全流程
 
----
 
 
 
@@ -51,7 +49,6 @@ AIGC-Claw 是一个 AI 创意视频生成系统。你只需要输入一个创意
 
 流程覆盖完整影视制作链路：剧本创作、角色设计、分镜规划、参考图生成、视频生成、后期剪辑。每个阶段都会产出可视化结果并支持确认后继续，兼顾自动化效率与可控性。
 
----
 
 ## 📺 AIGC-Claw 示例
 
