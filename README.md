@@ -24,12 +24,12 @@
 </h4>
 
 <p align="center">
-  <b><i><font size="5">直接与 <a href="#方式二openclaw-自动配置">OpenClaw</a> 对话："研究 X" → 搞定。</font></i></b>
+  <b><i><font size="5">直接与 <a href="https://github.com/openclaw/openclaw">OpenClaw</a> 对话："生成 X 的视频" → 搞定。</font></i></b>
 </p>
 
 <div align="center">
 
-🎬  [**视频演示**](https://www.youtube.com/@imryanxu)  📖  [**集成指南**](#方式二openclaw-自动配置)  🦀  [**ClawHub**](https://clawhub.ai/hit-cxf/aigc-director)
+📺 [**Bilibili**](https://www.youtube.com/@imryanxu)  ▶️ [**YouTube**](https://www.youtube.com/@imryanxu)  📖 [**集成指南**](#方式二openclaw-自动配置)  🦀 [**ClawHub**](https://clawhub.ai/hit-cxf/aigc-director)
 
 <a href="https://trendshift.io/repositories/12871" target="_blank"><img src="https://trendshift.io/api/badge/repositories/12871" alt="HITsz-TMG%2FFilmAgent | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
