@@ -52,6 +52,20 @@ AIGC-Claw 是一个面向创意视频生产的 AI 导演系统。你只需要给
 
 ## 📺 AIGC-Claw 示例
 
+<table>
+<tr>
+<td align="center" width="33%">
+  <video src="https://github.com/user-attachments/assets/63c2f33c-da50-44f0-8c26-a65611479d6a" controls width="100%"></video>
+</td>
+<td align="center" width="33%">
+  <video src="https://github.com/user-attachments/assets/d7c65cad-05b9-46c8-ab0e-96e39909f978" controls width="100%"></video>
+</td>
+<td align="center" width="33%">
+  <video src="https://github.com/user-attachments/assets/ec67546e-2d3d-4b34-b1ad-7d860a9bc1aa" controls width="100%"></video>
+</td>
+</tr>
+</table>
+
 <details>
 <summary><b>Web 前端界面</b></summary>
 <div align="center">

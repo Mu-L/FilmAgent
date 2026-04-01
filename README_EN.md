@@ -29,7 +29,7 @@
 
 <div align="center">
 
-📺 [**Bilibili**](https://space.bilibili.com/2031891503?spm_id_from=333.1007.0.0)  ▶️ [**YouTube**](https://www.youtube.com/@imryanxu)  📖 [**Integration Guide**](https://github.com/HITsz-TMG/AIGC-Claw?tab=readme-ov-file#方式二openclaw-自动配置)  🌐 [**中文 README**](./README.md)  🦀 [**ClawHub**](https://clawhub.ai/hit-cxf/aigc-director)
+📺 [**Bilibili**](https://space.bilibili.com/2031891503?spm_id_from=333.1007.0.0)  ▶️ [**YouTube**](https://www.youtube.com/@imryanxu)  📖 [**Integration Guide**](https://github.com/HITsz-TMG/AIGC-Claw/blob/main/README_EN.md#method-2-openclaw-auto-setup)  🌐 [**中文 README**](./README.md)  🦀 [**ClawHub**](https://clawhub.ai/hit-cxf/aigc-director)
 
 <a href="https://trendshift.io/repositories/12871" target="_blank"><img src="https://trendshift.io/api/badge/repositories/12871" alt="HITsz-TMG%2FFilmAgent | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
@@ -50,6 +50,20 @@ It is not just a one-shot "text-to-video" tool. Instead, it is a full production
 
 ## 📺 AIGC-Claw Examples
 
+<table>
+<tr>
+<td align="center" width="33%">
+  <video src="https://github.com/user-attachments/assets/63c2f33c-da50-44f0-8c26-a65611479d6a" controls width="100%"></video>
+</td>
+<td align="center" width="33%">
+  <video src="https://github.com/user-attachments/assets/d7c65cad-05b9-46c8-ab0e-96e39909f978" controls width="100%"></video>
+</td>
+<td align="center" width="33%">
+  <video src="https://github.com/user-attachments/assets/ec67546e-2d3d-4b34-b1ad-7d860a9bc1aa" controls width="100%"></video>
+</td>
+</tr>
+</table>
+
 <details>
 <summary><b>Web Frontend</b></summary>
 <div align="center">
@@ -64,7 +78,7 @@ It is not just a one-shot "text-to-video" tool. Instead, it is a full production
 </details>
 
 <details>
-<summary><b>WeChat Interaction</b></summary>
+<summary><b>WeChat Integration</b></summary>
 <div align="center">
 
 | | | | |
@@ -75,7 +89,7 @@ It is not just a one-shot "text-to-video" tool. Instead, it is a full production
 </details>
 
 <details>
-<summary><b>Feishu Interaction</b></summary>
+<summary><b>Feishu Integration</b></summary>
 <div align="center">
 
 | | | | |
