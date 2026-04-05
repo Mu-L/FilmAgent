@@ -156,7 +156,7 @@ function ClipRow({
       {/* 左侧: 描述信息 */}
       <div className="w-[280px] flex-shrink-0 p-4 border-r border-gray-100 flex flex-col">
         <div className="flex items-center gap-2 mb-2">
-          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-rose-100 text-rose-700 text-xs font-bold flex-shrink-0">
+          <span className="flex items-center justify-center h-6 px-1.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold flex-shrink-0 whitespace-nowrap">
             {clip.index ?? clip.id.replace('Scene_', '')}
           </span>
           <span className="text-sm font-semibold text-gray-800 truncate">{clip.name}</span>
@@ -202,12 +202,16 @@ function ClipRow({
             value={editDesc ?? clip.description}
             onChange={e => onDescChange?.(e.target.value)}
             rows={4}
-            className="flex-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-2 resize-none focus:outline-none focus:ring-1 focus:ring-rose-300"
+            className="h-[120px] text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-2 resize-none focus:outline-none focus:ring-1 focus:ring-rose-300"
           />
         ) : clip.description ? (
-          <p className="flex-1 text-xs text-gray-600 leading-relaxed line-clamp-4">{clip.description}</p>
+          <div className="h-[120px] overflow-y-auto pr-1 custom-scrollbar">
+             <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{clip.description}</p>
+          </div>
         ) : (
-          <p className="flex-1 text-xs text-gray-400 italic">无提示词</p>
+          <div className="h-[120px] flex items-center justify-center">
+            <p className="text-xs text-gray-400 italic">无提示词</p>
+          </div>
         )}
         {/* 重新生成按钮 */}
         {!isStageRunning && (
@@ -272,7 +276,23 @@ function ClipRow({
 }
 
 /* ─── 主组件 ─── */
-export default function VideoStage({ state, sessionId, onConfirm, onIntervene, onRegenerate, onUpdateArtifact, onSaveSelections, showConfirm, isRunning, videoSound = 'on', videoShotType = 'multi', onVideoParamsChange, referenceArtifact, hasPendingItems, hasNextStageStarted }: StageViewProps) {
+export default function VideoStage({ state, sessionId, onConfirm, onIntervene, onRegenerate, onUpdateArtifact, onSaveSelections, showConfirm, isRunning, videoSound = 'on', videoShotType = 'multi', onVideoParamsChange, referenceArtifact, hasPendingItems, hasNextStageStarted, scriptArtifact }: StageViewProps) {
+  // 提取剧集标题映射
+  const episodeTitleMap = React.useMemo(() => {
+    const map: Record<number, string> = {};
+    if (scriptArtifact?.episodes) {
+      scriptArtifact.episodes.forEach((ep: any) => {
+        // 关键修复：兼容剧本阶段的字段名
+        const epNum = ep.episode_number || ep.episode;
+        const epTitle = ep.act_title || ep.title;
+        if (epNum) {
+          map[Number(epNum)] = epTitle || '';
+        }
+      });
+    }
+    return map;
+  }, [scriptArtifact]);
+
   // 检查每个 clip 是否有对应的参考图
   const hasReferenceImage = useCallback((clipId: string): boolean => {
     if (!referenceArtifact?.scenes) return false;
@@ -484,43 +504,70 @@ export default function VideoStage({ state, sessionId, onConfirm, onIntervene, o
 
         {/* ═══ 视频列表 ═══ */}
         {hasClips && (
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <Film className="w-4 h-4 text-rose-500" />
-              <h3 className="text-sm font-semibold text-gray-700">视频片段 ({clips.length})</h3>
-            </div>
-            <div className="space-y-3">
-              {clips.map(clip => {
-                // 检查是否有参考图
-                const hasRef = hasReferenceImage(clip.id);
+          <div className="space-y-10">
+            {(() => {
+              // 按剧集分组
+              const episodes: Record<number, ClipItem[]> = {};
+              clips.forEach(c => {
+                const ep = (c as any).episode || 1;
+                if (!episodes[ep]) episodes[ep] = [];
+                episodes[ep].push(c);
+              });
+
+              return Object.keys(episodes).sort((a, b) => Number(a) - Number(b)).map(epNum => {
+                const epClips = episodes[Number(epNum)];
+                const fallbackTitle = (epClips[0] as any).episode_title || `第 ${epNum} 集`;
+                const scriptTitle = episodeTitleMap[Number(epNum)];
+                const episodeTitle = scriptTitle ? `第 ${epNum} 集：${scriptTitle}` : fallbackTitle;
+                
                 return (
-                  <div key={clip.id} className="relative">
-                    {!hasRef && (
-                      <div className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 flex items-center gap-2">
-                        <AlertTriangle className="w-3.5 h-3.5" />
-                        未检测到首帧参考图，请先完成参考图生成
+                  <div key={epNum} className="space-y-6">
+                    <div className="flex items-center justify-between py-2 px-1 border-b border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-1.5 h-6 bg-blue-500 rounded-full" />
+                        <h3 className="text-base font-bold text-gray-800">{episodeTitle}</h3>
                       </div>
-                    )}
-                    <ClipRow
-                      clip={{ ...clip, selected: getSelected(clip) }}
-                      editDesc={editDescs[clip.id]}
-                      onDescChange={canEdit ? (val => setEditDescs(prev => ({ ...prev, [clip.id]: val }))) : undefined}
-                      onSavePrompt={() => handleSavePrompt(clip.id)}
-                      onRegenerate={() => handleRegenerate(clip.id)}
-                      onSelectVersion={path => handleSelectVersion(clip.id, path)}
-                      onToggleEdit={() => handleToggleEdit(clip.id)}
-                      isStageRunning={state.status === 'running'}
-                      isRegenerating={regeneratingIds.has(clip.id)}
-                      isEditing={editingIds.has(clip.id)}
-                      canEdit={canEdit}
-                      disabled={!hasRef}
-                      isSaving={savingIds.has(clip.id)}
-                    />
+                      <span className="text-[11px] text-blue-600 font-medium bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100 italic">
+                        {epClips.length} 个片段
+                      </span>
+                    </div>
+
+                    <div className="space-y-4">
+                      {epClips.map(clip => {
+                        // 检查是否有参考图
+                        const hasRef = hasReferenceImage(clip.id);
+                        return (
+                          <div key={clip.id} className="relative">
+                            {!hasRef && (
+                              <div className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 flex items-center gap-2">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                未检测到首帧参考图，请先完成参考图生成
+                              </div>
+                            )}
+                            <ClipRow
+                              clip={{ ...clip, selected: getSelected(clip) }}
+                              editDesc={editDescs[clip.id]}
+                              onDescChange={canEdit ? (val => setEditDescs(prev => ({ ...prev, [clip.id]: val }))) : undefined}
+                              onSavePrompt={() => handleSavePrompt(clip.id)}
+                              onRegenerate={() => handleRegenerate(clip.id)}
+                              onSelectVersion={path => handleSelectVersion(clip.id, path)}
+                              onToggleEdit={() => handleToggleEdit(clip.id)}
+                              isStageRunning={state.status === 'running'}
+                              isRegenerating={regeneratingIds.has(clip.id)}
+                              isEditing={editingIds.has(clip.id)}
+                              canEdit={canEdit}
+                              disabled={!hasRef}
+                              isSaving={savingIds.has(clip.id)}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
-              })}
-            </div>
-          </section>
+              });
+            })()}
+          </div>
         )}
 
         {/* 如果有 artifact 数据（即使 status 是 pending），也显示内容 */}

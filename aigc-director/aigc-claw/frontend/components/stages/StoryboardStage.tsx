@@ -250,12 +250,12 @@ export default function StoryboardStage({
               return (
                 <div key={epIdx} className="space-y-4">
                   {/* 一级：剧集抬头 (参考第一阶段) */}
-                  <div className="flex items-center justify-between border-b pb-2 border-gray-100">
+                  <div className="flex items-center justify-between py-2 px-1 border-b border-gray-100">
                     <div className="flex items-center gap-3">
-                      <span className="text-xs font-black text-white bg-violet-500 px-2 py-0.5 rounded leading-tight shadow-sm">第 {String(episode.episode_number)} 集</span>
-                      <h3 className="text-base font-bold text-gray-800">{episode.episode_title}</h3>
+                      <div className="w-1.5 h-6 bg-violet-500 rounded-full" />
+                      <h3 className="text-base font-bold text-gray-800">第 {String(episode.episode_number)} 集：{episode.episode_title}</h3>
                     </div>
-                    <span className="text-[11px] font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="text-[11px] text-violet-600 font-medium bg-violet-50 px-2.5 py-1 rounded-full border border-violet-100 flex items-center gap-1 italic">
                       <Clock className="w-3 h-3" /> 总计 {epTotalTime}s
                     </span>
                   </div>

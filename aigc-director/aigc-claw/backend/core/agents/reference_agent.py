@@ -165,11 +165,14 @@ class ReferenceGeneratorAgent(AgentInterface):
             
             # 将该段下所有镜头组合为简要说明
             shots_summary = " ".join([s.get('content', '') for s in seg.get('shots', [])])
+            ep_n = seg.get('episode_number', 1)
+            seg_n = seg.get('segment_number', idx)
             
             preview.append({
                 "id": segment_id,
-                "name": f"第{seg.get('episode_number', 1)}集-片段{seg.get('segment_number', idx)}",
-                "index": idx,
+                "name": f"第{ep_n}集-片段{seg_n}",
+                "episode": ep_n,
+                "index": seg_n,
                 "description": shots_summary[:50] + '...' if len(shots_summary) > 50 else shots_summary,
                 "selected": versions[-1] if versions else "",
                 "versions": versions,

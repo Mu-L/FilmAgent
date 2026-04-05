@@ -158,10 +158,13 @@ class VideoDirectorAgent(AgentInterface):
         for idx, seg in enumerate(segments, 1):
             segment_id = seg["segment_id"]
             versions = self._list_versions(sid, segment_id)
+            ep_n = seg.get('episode_number', 1)
+            seg_n = seg.get('segment_number', idx)
             preview.append({
                 "id": segment_id,
-                "name": f"片段{idx} ({seg.get('location', '')})",
-                "index": idx,
+                "name": f"第{ep_n}集-片段{seg_n}",
+                "episode": ep_n,
+                "index": seg_n,
                 "description": self._assemble_prompt(seg, style_name),
                 "duration": seg.get('total_duration', 10),
                 "selected": versions[-1] if versions else "",
@@ -175,10 +178,13 @@ class VideoDirectorAgent(AgentInterface):
         for idx, seg in enumerate(segments, 1):
             segment_id = seg["segment_id"]
             versions = self._list_versions(sid, segment_id)
+            ep_n = seg.get('episode_number', 1)
+            seg_n = seg.get('segment_number', idx)
             clips.append({
                 "id": segment_id,
-                "name": f"片段{idx}",
-                "index": idx,
+                "name": f"第{ep_n}集-片段{seg_n}",
+                "episode": ep_n,
+                "index": seg_n,
                 "description": self._assemble_prompt(seg, style_name),
                 "duration": seg.get('total_duration', 10),
                 "selected": versions[-1] if versions else "",

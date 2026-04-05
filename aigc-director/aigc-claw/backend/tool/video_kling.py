@@ -322,7 +322,7 @@ class KlingVideoClient:
         save_path: str,
         model: str = "kling-v3",
         duration: int = 5,
-        mode: str = "std",
+        mode: str = "pro",
         cfg_scale: float = 0.5,
         negative_prompt: str = "",
         sound: str = "",
@@ -387,7 +387,7 @@ if __name__ == "__main__":
     PROMPT = ""
     MODEL = "kling-v3"         # kling-v3 / kling-v2-6 / kling-v2-5-turbo
     DURATION = 5               # v3: 3~15, v2: 5 或 10
-    MODE = "std"               # std 或 pro
+    MODE = "pro"               # std 或 pro
     SOUND = ""                 # "" = 自动开启, "on", "off"
 
     print("=== 可灵 (Kling) 图生视频测试 ===")

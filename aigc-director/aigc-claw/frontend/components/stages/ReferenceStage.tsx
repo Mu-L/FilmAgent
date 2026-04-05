@@ -138,6 +138,7 @@ function SceneRow({
   isRegenerating,
   isEditing,
   onToggleEdit,
+  getSelected,
 }: {
   scene: SceneItem;
   canEdit: boolean;
@@ -150,6 +151,7 @@ function SceneRow({
   isRegenerating?: boolean;
   isEditing?: boolean;
   onToggleEdit?: () => void;
+  getSelected: (scene: SceneItem) => string;
 }) {
   const isPending = scene.status === 'pending' || isRegenerating;
   const isFailed = scene.status === 'failed' && !isRegenerating;
@@ -163,10 +165,10 @@ function SceneRow({
       {/* 左侧: 提示词 */}
       <div className="w-[360px] flex-shrink-0 p-4 border-r border-gray-100 flex flex-col">
         <div className="flex items-center gap-2 mb-2">
-          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold flex-shrink-0">
+          <span className="flex items-center justify-center h-6 px-1.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex-shrink-0 whitespace-nowrap">
             {scene.index ?? scene.id.replace('Scene_', '')}
           </span>
-          <span className="text-sm font-semibold text-gray-800 truncate">{scene.name}</span>
+          <span className="text-sm font-semibold text-gray-800 truncate">{scene.name || (scene as any).title || `片段 ${scene.index}`}</span>
           {isPending && (
             <span className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">
               <Loader className="w-2.5 h-2.5 animate-spin" />生成中
@@ -206,10 +208,12 @@ function SceneRow({
             value={editDesc}
             onChange={e => onDescChange(e.target.value)}
             rows={6}
-            className="flex-1 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-2 resize-none focus:outline-none focus:ring-1 focus:ring-emerald-300"
+            className="h-[180px] text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-2 resize-none focus:outline-none focus:ring-1 focus:ring-emerald-300"
           />
         ) : (
-          <p className="flex-1 text-xs text-gray-600 leading-relaxed line-clamp-6">{scene.description}</p>
+          <div className="h-[180px] overflow-y-auto pr-1 custom-scrollbar">
+            <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{scene.description}</p>
+          </div>
         )}
         {/* 重新生成按钮 */}
         {!isStageRunning && (
@@ -263,7 +267,7 @@ function SceneRow({
           <div className="relative w-full">
             <ImageGallery
               versions={scene.versions}
-              selected={scene.selected}
+              selected={getSelected(scene)}
               onSelect={onSelectVersion}
               showPlaceholder={isRegenerating}
             />
@@ -284,7 +288,31 @@ function SceneRow({
 }
 
 /* ─── 主组件 ─── */
-export default function ReferenceStage({ state, sessionId, onConfirm, onIntervene, onRegenerate, onUpdateArtifact, onSaveSelections, showConfirm, isRunning, hasPendingItems, hasNextStageStarted }: StageViewProps) {
+export default function ReferenceStage({ state, sessionId, onConfirm, onIntervene, onRegenerate, onUpdateArtifact, onSaveSelections, showConfirm, isRunning, hasPendingItems, hasNextStageStarted, scriptArtifact }: StageViewProps) {
+  const [editDescs, setEditDescs] = useState<Record<string, string>>({});
+  const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
+  const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
+  const [editingIds, setEditingIds] = useState<Set<string>>(new Set());
+  const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
+
+  // 提取剧集标题映射
+  const episodeTitleMap = React.useMemo(() => {
+    const map: Record<number, string> = {};
+    if (scriptArtifact?.episodes) {
+      scriptArtifact.episodes.forEach((ep: any) => {
+        // 关键修复：这里的字段名应该是 episode_number 和 act_title
+        const epNum = ep.episode_number || ep.episode;
+        const epTitle = ep.act_title || ep.title;
+        if (epNum) {
+          map[Number(epNum)] = epTitle || '';
+        }
+      });
+    }
+    return map;
+  }, [scriptArtifact]);
+
+  const getSelected = (scene: SceneItem) => selectedVersions[scene.id] || scene.selected;
+
   // 兼容旧格式: scene_images: {Scene_1: "path"} → scenes: [{id, ...}]
   const scenes: SceneItem[] = (() => {
     if (state.artifact?.scenes?.length) return state.artifact.scenes;
@@ -307,12 +335,6 @@ export default function ReferenceStage({ state, sessionId, onConfirm, onInterven
     }
     return [];
   })();
-
-  const [editDescs, setEditDescs] = useState<Record<string, string>>({});
-  const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
-  const [regeneratingIds, setRegeneratingIds] = useState<Set<string>>(new Set());
-  const [editingIds, setEditingIds] = useState<Set<string>>(new Set());
-  const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
 
   const canEdit = state.status === 'waiting' || state.status === 'completed';
 
@@ -395,7 +417,11 @@ export default function ReferenceStage({ state, sessionId, onConfirm, onInterven
   };
 
   const handleRegenerate = (sceneId: string) => {
-    setRegeneratingIds(prev => new Set(prev).add(sceneId));
+    setRegeneratingIds(prev => {
+      const next = new Set(prev);
+      next.add(sceneId);
+      return next;
+    });
     onIntervene({ regenerate_scenes: [sceneId] });
   };
 
@@ -416,8 +442,6 @@ export default function ReferenceStage({ state, sessionId, onConfirm, onInterven
       await onSaveSelections(selections);
     }
   };
-
-  const getSelected = (scene: SceneItem) => selectedVersions[scene.id] || scene.selected;
 
   return (
     <div className="flex flex-col h-full">
@@ -441,34 +465,63 @@ export default function ReferenceStage({ state, sessionId, onConfirm, onInterven
 
         {/* ═══ 场景列表 ═══ */}
         {hasScenes && (
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <ImageIcon className="w-4 h-4 text-emerald-500" />
-              <h3 className="text-sm font-semibold text-gray-700">场景参考图 ({scenes.length})</h3>
-            </div>
-            <div className="space-y-3">
-              {scenes.map(scene => (
-                <SceneRow
-                  key={scene.id}
-                  scene={{ ...scene, selected: getSelected(scene) }}
-                  canEdit={canEdit}
-                  editDesc={editDescs[scene.id] || scene.description}
-                  onDescChange={val => setEditDescs(prev => ({ ...prev, [scene.id]: val }))}
-                  onRegenerate={() => handleRegenerate(scene.id)}
-                  onSelectVersion={path => handleSelectVersion(scene.id, path)}
-                  onSavePrompt={() => handleSavePrompt(scene.id)}
-                  isStageRunning={state.status === 'running'}
-                  isRegenerating={regeneratingIds.has(scene.id) || savingIds.has(scene.id)}
-                  isEditing={editingIds.has(scene.id)}
-                  onToggleEdit={() => handleToggleEdit(scene.id)}
-                />
-              ))}
-            </div>
-          </section>
+          <div className="space-y-10">
+            {(() => {
+              // 按剧集分组
+              const episodes: Record<number, SceneItem[]> = {};
+              scenes.forEach(s => {
+                const ep = (s as any).episode || 1;
+                if (!episodes[ep]) episodes[ep] = [];
+                episodes[ep].push(s);
+              });
+
+              return Object.keys(episodes).sort((a, b) => Number(a) - Number(b)).map(epNum => {
+                const epScenes = episodes[Number(epNum)];
+                const fallbackTitle = (epScenes[0] as any).episode_title || `第 ${epNum} 集`;
+                const scriptTitle = episodeTitleMap[Number(epNum)];
+                const episodeTitle = scriptTitle ? `第 ${epNum} 集：${scriptTitle}` : fallbackTitle;
+                
+                return (
+                  <div key={epNum} className="space-y-4">
+                    <div className="flex items-center justify-between py-2 px-1 border-b border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-1.5 h-6 bg-emerald-500 rounded-full" />
+                        <h3 className="text-base font-bold text-gray-800">{episodeTitle}</h3>
+                      </div>
+                      <span className="text-[11px] text-emerald-600 font-medium bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100 italic">
+                        {epScenes.length} 个片段
+                      </span>
+                    </div>
+
+                    <div className="space-y-4">
+                      {epScenes.map(scene => (
+                        <div key={scene.id} className="relative">
+                          <SceneRow
+                            scene={scene}
+                            editDesc={editDescs[scene.id] ?? scene.description}
+                            onDescChange={(val) => setEditDescs(prev => ({ ...prev, [scene.id]: val }))}
+                            onSavePrompt={() => handleSavePrompt(scene.id)}
+                            onRegenerate={() => handleRegenerate(scene.id)}
+                            onSelectVersion={(path) => handleSelectVersion(scene.id, path)}
+                            isStageRunning={state.status === 'running'}
+                            isRegenerating={regeneratingIds.has(scene.id)}
+                            isEditing={editingIds.has(scene.id)}
+                            onToggleEdit={() => handleToggleEdit(scene.id)}
+                            canEdit={canEdit}
+                            getSelected={getSelected}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
         )}
 
         {/* 如果有 artifact 数据（即使 status 是 pending），也显示内容 */}
-        {state.status === 'pending' && !hasScenes && (
+        {!hasScenes && state.status === 'pending' && (
           <div className="text-center text-gray-400 text-sm py-20">等待上一阶段完成...</div>
         )}
       </div>
@@ -478,7 +531,6 @@ export default function ReferenceStage({ state, sessionId, onConfirm, onInterven
         status={state.status}
         onConfirm={onConfirm}
         showConfirm={showConfirm}
-        onSave={undefined}
         onRegenerate={onRegenerate}
         stageId="reference_generation"
         hasPendingItems={hasPendingItems}
@@ -488,3 +540,4 @@ export default function ReferenceStage({ state, sessionId, onConfirm, onInterven
     </div>
   );
 }
+

@@ -205,7 +205,6 @@ class WorkflowEngine:
                 return
 
             # 如果有 progress 回调（纯文字阶段），也定期保存
-            # 这样前端可以实时看到文字生成进度
             current_time = time.time()
             if current_time - last_save_time["time"] >= SAVE_INTERVAL:
                 last_save_time["time"] = current_time

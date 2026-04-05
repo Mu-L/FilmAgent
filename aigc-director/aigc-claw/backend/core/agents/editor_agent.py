@@ -38,6 +38,12 @@ class VideoEditorAgent(AgentInterface):
         video_art = artifacts.get("video_generation", {})
         clips_list = video_art.get("clips", [])
         
+        # 获取剧集标题映射 (从 Storyboard)
+        storyboard_art = artifacts.get("storyboard", {})
+        episodes_info = storyboard_art.get("episodes", [])
+        ep_title_map = {int(ep.get("episode_number", 0)): ep.get("act_title", f"第 {ep.get('episode_number')} 集") 
+                        for ep in episodes_info if ep.get("episode_number")}
+        
         if not clips_list:
             # 兼容旧逻辑：如果 artifacts 里没有，尝试从 input_data 获取
             selected_clips: dict = input_data.get("selected_clips", {})
@@ -49,92 +55,104 @@ class VideoEditorAgent(AgentInterface):
         def run():
             video_dir = os.path.join('code/result/video', str(sid))
             os.makedirs(video_dir, exist_ok=True)
+            output_dir = os.path.join(video_dir, 'output')
+            os.makedirs(output_dir, exist_ok=True)
             
-            clip_paths = []
+            # 按剧集分组片段
+            episodes_map = {}  # { episode_index: [clip_paths] }
             
-            # 如果是从新格式读取
             if clips_list:
                 for clip in clips_list:
                     path = clip.get("selected")
-                    if path and os.path.exists(path):
-                        clip_paths.append(path)
-                    else:
+                    if not path or not os.path.exists(path):
                         logger.warning(f"[{sid}] Clip missing: {clip.get('id')} → {path}")
+                        continue
+                    
+                    # 优先使用片段数据中的 episode 字段
+                    ep_idx = clip.get("episode")
+                    
+                    # 如果没有 episode 字段，则尝试通过 ID 解析
+                    if ep_idx is None:
+                        match = re.search(r'(?:seg_|shot_)?(\d{1,3})_\d{1,3}', clip.get("id", ""))
+                        if match:
+                            ep_idx = int(match.group(1))
+                        else:
+                            # 最后的归底方案：从 name 提取或默认为 1
+                            name_match = re.search(r'第(\d+)集', clip.get("name", ""))
+                            if not name_match:
+                                name_match = re.search(r'(\d+)', clip.get("name", ""))
+                            ep_idx = int(name_match.group(1)) if name_match else 1
+                    
+                    episodes_map.setdefault(int(ep_idx), []).append(path)
             else:
-                # 按旧逻辑从 selected_clips (dict) 读取
+                # 兼容旧逻辑
                 def sort_key(k: str) -> tuple:
                     return tuple(int(n) for n in re.findall(r'\d+', k)) or (999,)
                 selected_clips = input_data.get("selected_clips", {})
                 for shot_id in sorted(selected_clips.keys(), key=sort_key):
                     path = selected_clips[shot_id]
                     if os.path.exists(path):
-                        clip_paths.append(path)
+                        # 旧逻辑默认全部归为第1集
+                        episodes_map.setdefault(1, []).append(path)
                     else:
                         logger.warning(f"[{sid}] Clip missing: {shot_id} → {path}")
 
-            if not clip_paths:
-                raise Exception("没有可用于拼接的视频文件，请检查之前阶段是否生成成功并选中了版本")
+            if not episodes_map:
+                raise Exception("没有可用于拼接的视频文件")
 
-            logger.info(f"[{sid}] Concat {len(clip_paths)} clips using fast stream copy")
-            self._report_progress("后期制作", f"准备拼接 {len(clip_paths)} 个片段...", 15)
+            final_videos = []
+            sorted_episodes = sorted(episodes_map.keys())
+            total_eps = len(sorted_episodes)
 
-            # 导出成片
-            output_dir = os.path.join(video_dir, 'output')
-            os.makedirs(output_dir, exist_ok=True)
-            output = os.path.join(output_dir, f'{sid}_final.mp4')
-            
-            # 使用列表文件进行 concat
-            list_file = os.path.join(video_dir, 'concat_list.txt')
-            with open(list_file, 'w', encoding='utf-8') as f:
-                for p in clip_paths:
-                    # 使用绝对路径并处理 Windows 路径转义
-                    abs_p = os.path.abspath(p).replace('\\', '/')
-                    f.write(f"file '{abs_p}'\n")
+            ffmpeg_exe = 'ffmpeg'
 
-            try:
-                self._report_progress("后期制作", "正在拼接视频 (FFmpeg)...", 50)
+            for i, ep_idx in enumerate(sorted_episodes):
+                self._report_progress("后期制作", f"正在拼接第 {ep_idx} 集 ({i+1}/{total_eps})...", int(20 + (i/total_eps)*70))
                 
-                ffmpeg_exe = 'ffmpeg'
+                clip_paths = episodes_map[ep_idx]
+                list_file = os.path.join(video_dir, f'concat_list_ep{ep_idx}.txt')
+                output = os.path.join(output_dir, f'{sid}_ep{ep_idx}.mp4')
                 
-                # 为了播放兼容性，我们进行轻量级的重新编码 (Fast Preset)
-                # 这样可以处理不同片段间可能存在的微小元数据差异，确保播放时长正常
+                with open(list_file, 'w', encoding='utf-8') as f:
+                    for p in clip_paths:
+                        abs_p = os.path.abspath(p).replace('\\', '/')
+                        f.write(f"file '{abs_p}'\n")
+
                 cmd = [
                     ffmpeg_exe, '-f', 'concat', '-safe', '0',
                     '-i', list_file, 
-                    '-c:v', 'libx264',    # 重新编码视频以保证兼容性
-                    '-preset', 'fast',    # 快速平衡速度与质量
-                    '-crf', '22',         # 保持高质量
-                    '-c:a', 'aac',        # 确保有标准的音频流
-                    '-pix_fmt', 'yuv420p', # 确保在所有播放器上都能播放
-                    '-movflags', '+faststart',
-                    '-y', output
+                    '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
+                    '-c:a', 'aac', '-pix_fmt', 'yuv420p',
+                    '-movflags', '+faststart', '-y', output
                 ]
                 
-                logger.info(f"[{sid}] Running ffmpeg concat/re-encode: {' '.join(cmd)}")
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-                logger.info(f"[{sid}] FFmpeg concat success: {output}")
+                logger.info(f"[{sid}] Running ffmpeg for Ep {ep_idx}: {' '.join(cmd)}")
+                subprocess.run(cmd, capture_output=True, text=True, check=True)
                 
-            except Exception as e:
-                logger.error(f"Fast concat failed: {str(e)}")
-                # 如果是权限或路径问题，最后尝试一次 moviepy (虽然慢但兼容性好)
-                raise Exception(f"视频快速拼接失败: {str(e)}")
-                
-            return output
+                ep_title = ep_title_map.get(ep_idx, f"第 {ep_idx} 集")
+                final_videos.append({
+                    "episode": ep_idx,
+                    "path": output,
+                    "name": ep_title
+                })
+
+            return final_videos
 
         loop = asyncio.get_running_loop()
-        final_path = await loop.run_in_executor(None, run)
+        final_results = await loop.run_in_executor(None, run)
 
         self._report_progress("后期制作", "成片完成", 100)
 
         # 同样将最终结果写入 artifacts
         session_data.setdefault("artifacts", {})["post_production"] = {
             "session_id": sid,
-            "final_video": final_path
+            "final_videos": final_results,
+            "final_video": final_results[0]["path"] if final_results else "" # 兼容旧字段
         }
         with open(session_path, 'w', encoding='utf-8') as f:
             json.dump(session_data, f, indent=4, ensure_ascii=False)
 
         return {
-            "payload": {"session_id": sid, "final_video": final_path},
+            "payload": {"session_id": sid, "final_videos": final_results},
             "stage_completed": True,
         }

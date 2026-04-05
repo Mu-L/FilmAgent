@@ -378,6 +378,11 @@ export default function WorkflowPanel() {
             artifact = artResult.artifact;
           } catch { /* ignore */ }
 
+          // 如果是后处理阶段，即使 artifact 为空也尝试从事件中读取预览数据
+          if (stageId === 'post_production' && !artifact && event.data?.assets_preview) {
+            artifact = event.data.assets_preview;
+          }
+
           updateStageState(stageId, {
             status: newStatus,
             progress: 100,
@@ -1180,6 +1185,11 @@ export default function WorkflowPanel() {
       ? stageStates['reference_generation']?.artifact
       : undefined;
 
+    // 传递第1阶段的 artifact 到第4、5、6阶段用于获取剧集标题
+    const scriptArtifact = (activeStage === 'reference_generation' || activeStage === 'video_generation' || activeStage === 'post_production')
+      ? stageStates['script_generation']?.artifact
+      : undefined;
+
     return (
       <Component
         state={state}
@@ -1200,6 +1210,11 @@ export default function WorkflowPanel() {
           if (params.videoShotType !== undefined) setVideoShotType(params.videoShotType);
         }}
         referenceArtifact={referenceArtifact}
+        scriptArtifact={scriptArtifact}
+        artifacts={Object.keys(stageStates).reduce((acc: any, key) => {
+          acc[key] = stageStates[key].artifact;
+          return acc;
+        }, {})}
       />
     );
   };

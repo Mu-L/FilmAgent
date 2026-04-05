@@ -29,4 +29,6 @@ export interface StageViewProps {
   onVideoParamsChange?: (params: { videoSound?: string; videoShotType?: string }) => void;
   /** 参考图阶段的 artifact（仅 VideoStage 使用，用于检查依赖） */
   referenceArtifact?: any;
+  /** 剧本阶段的 artifact（用于获取剧集标题） */
+  scriptArtifact?: any;
 }
