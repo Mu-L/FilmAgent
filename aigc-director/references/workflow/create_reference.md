@@ -30,6 +30,8 @@ curl -X POST "http://localhost:8000/api/project/{session_id}/execute/reference_g
 }
 ```
 
+> ⚠️ **注意**：由于系统会对生成的参考图进行质量评估（VLM 评分），质量不合格的图会自动触发重新生成。因此，**参考图生成的总次数通常会大于分镜片段的数量**。在监听 SSE 进度时，请以最终 `status: "done"` 的 `asset_complete` 事件为准。
+
 ## 实时反馈
 
 在生成过程中，SSE 会发送 `asset_complete` 事件：
