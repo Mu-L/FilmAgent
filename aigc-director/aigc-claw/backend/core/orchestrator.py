@@ -9,6 +9,7 @@ import logging
 import os
 import threading
 import time
+import copy
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
@@ -130,7 +131,6 @@ class WorkflowEngine:
                 state.stages_completed = data.get('stages_completed', [])
                 state.artifacts = data.get('artifacts', {})
                 state.meta = data.get('meta', {})
-                state.error = data.get('error')
                 state.updated_at = data.get('updated_at', 0)
 
                 # 缓存到内存
@@ -170,6 +170,72 @@ class WorkflowEngine:
         except ValueError:
             pass
         return None
+
+    # ──────────── 跨阶段同步逻辑 ────────────
+    def _sync_artifacts_cross_stages(self, state: WorkflowState, stage: WorkflowStage, payload: Dict):
+        """
+        跨阶段数据同步钩子：当某个阶段产生新数据时，自动推送到后续阶段。
+        例如：剧本续写产生的新角色/分镜，自动同步到 Stage 2 和 Stage 3。
+        """
+        if not isinstance(payload, dict):
+            return
+
+        # 案例 1: 剧本续写确认 (Script Confirmation)
+        if stage == WorkflowStage.SCRIPT_GENERATION:
+            # 获取合并后的角色、场景和剧集
+            new_chars = payload.get("new_characters", [])
+            new_settings = payload.get("new_settings", [])
+            new_episodes = payload.get("new_episodes", [])
+            # 如果没有新增剧集数据，无需同步到 Stage 2 和 3
+            if not new_episodes: 
+                return 
+            
+            # (A) 同步到第二阶段 (角色设计)
+            if new_chars or new_settings:
+                # 注意：WorkflowStage.CHARACTER_DESIGN 是 Enum，这里需要使用 .value
+                char_stage_key = WorkflowStage.CHARACTER_DESIGN.value
+                char_art = state.artifacts.get(char_stage_key)
+                if not isinstance(char_art, dict):
+                    char_art = {"characters": [], "settings": [], "version": 1}
+                
+                existing_chars = char_art.get("characters", [])
+                for nc in new_chars:
+                    if not any(c.get("id") == nc.get("character_id") for c in existing_chars):
+                        existing_chars.append({
+                            "id": nc.get("character_id"), "name": nc.get("name"), "description": nc.get("description"),
+                            "selected": "", "versions": []
+                        })
+                char_art["characters"] = existing_chars
+                
+                existing_sets = char_art.get("settings", [])
+                for ns in new_settings:
+                    if not any(s.get("id") == ns.get("setting_id") for s in existing_sets):
+                        existing_sets.append({
+                            "id": ns.get("setting_id"), "name": ns.get("name"), "description": ns.get("description"),
+                            "selected": "", "versions": []
+                        })
+                char_art["settings"] = existing_sets
+                state.artifacts[char_stage_key] = char_art
+
+            # (B) 同步到第三阶段 (分镜设计)
+            if new_episodes:
+                story_stage_key = WorkflowStage.STORYBOARD.value
+                story_art = state.artifacts.get(story_stage_key)
+                if not isinstance(story_art, dict):
+                    story_art = {"episodes": [], "version": 1}
+                
+                existing_eps = story_art.get("episodes", [])
+                for ne in new_episodes:
+                    ep_num = ne.get("episode_number")
+                    if not any(e.get("episode_number") == ep_num for e in existing_eps):
+                        existing_eps.append({
+                            "episode_number": ep_num,
+                            "episode_title": ne.get("act_title") or f"第{ep_num}集",
+                            "segments": []
+                        })
+                existing_eps.sort(key=lambda x: x.get("episode_number", 0))
+                story_art["episodes"] = existing_eps
+                state.artifacts[story_stage_key] = story_art
 
     async def execute_stage(self,
                             state: WorkflowState,
@@ -223,7 +289,28 @@ class WorkflowEngine:
                 logger.error(f"[execute_stage] Agent {stage.value} returned non-dict result: {type(result)}")
                 result = {"payload": result}
             
-            state.artifacts[stage.value] = result.get("payload")
+            payload = result.get("payload", {})
+            requires_intervention = result.get("requires_intervention", False)
+
+            # 根据阶段类型处理数据持久化和同步逻辑
+            if stage == WorkflowStage.SCRIPT_GENERATION:
+                if requires_intervention:
+                    # 【续写预览状态】直接保存 payload 以保留 new_episodes 供前端显示。
+                    # 此时千万不要跨阶段同步（避免向第二、三阶段注入用户未确认的数据）。
+                    state.artifacts[stage.value] = copy.deepcopy(payload)
+                else:
+                    # 【确定续写 / 正常生成状态】
+                    # 先同步增量数据到第二、三阶段
+                    self._sync_artifacts_cross_stages(state, stage, payload)
+                    # 然后清理第一阶段内部的临时增量字段并保存
+                    clean_art = copy.deepcopy(payload)
+                    for key in ["new_episodes", "new_characters", "new_settings", "sequel_idea"]:
+                        clean_art.pop(key, None)
+                    state.artifacts[stage.value] = clean_art
+            else:
+                # 其他阶段正常执行跨阶段同步和赋值
+                self._sync_artifacts_cross_stages(state, stage, payload)
+                state.artifacts[stage.value] = payload
 
             # 只有在 storyboard 阶段明确有修改时才执行同步
             if stage.value == "storyboard" and isinstance(intervention, dict) and "modified_storyboard" in intervention:
@@ -389,52 +476,58 @@ class WorkflowEngine:
 
         path = os.path.join(self._session_dir, f"{session_id}.json")
         data: Dict[str, Any] = {}
+        state = self.sessions.get(session_id)
+        
+        # 1. 准备基础数据
         if os.path.exists(path):
             try:
                 with open(path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
             except (json.JSONDecodeError, Exception):
-                # 文件损坏，忽略旧数据
                 pass
+
         data["session_id"] = session_id
         if meta:
             for k, v in meta.items():
                 data[k] = v
         if "created_at" not in data:
             data["created_at"] = time.time()
-        data["updated_at"] = time.time()
-        state = self.sessions.get(session_id)
+        
+        # 2. 将内存中的最新 state 合并到 data 中
         if state:
             data["current_stage"] = state.current_stage.value
             data["status"] = state.status
             data["stages_completed"] = state.stages_completed
+            # 这里的 state.artifacts 应该是已经经过 _sync_artifacts_cross_stages 处理的最新的内存对象
             data["artifacts"] = state.artifacts
             data["error"] = state.error
-            # datetime 对象需要转换为时间戳
-            data["updated_at"] = state.updated_at.timestamp() if isinstance(state.updated_at, datetime) else state.updated_at
-            # 保存元数据（包含模型配置）
+            data["updated_at"] = state.updated_at.timestamp() if isinstance(state.updated_at, datetime) else time.time()
+            
+            # 保存元数据
             if state.meta:
                 for k, v in state.meta.items():
                     if v is not None:
-                        # 转换并保持原始类型（尤其是布尔值）
                         if isinstance(v, str) and v.lower() == 'true':
                             data[k] = True
                         elif isinstance(v, str) and v.lower() == 'false':
                             data[k] = False
                         else:
                             data[k] = v
+        else:
+            data["updated_at"] = time.time()
 
-        # 原子写入：先写临时文件，再重命名
+        # 3. 原子写入：先写临时文件，再重命名
         dir_path = os.path.dirname(path)
         fd, tmp_path = tempfile.mkstemp(dir=dir_path, suffix='.json')
         try:
             with os.fdopen(fd, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             shutil.move(tmp_path, path)
-        except Exception:
-            # 写入失败，删除临时文件
+            logger.info(f"[Orchestrator] Session {session_id} saved successfully.")
+        except Exception as e:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
+            logger.error(f"[Orchestrator] Failed to save session {session_id}: {e}")
             raise
 
     def _load_sessions_from_disk(self):

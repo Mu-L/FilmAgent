@@ -77,8 +77,168 @@ class ScriptWriterAgent(AgentInterface):
                 modified = self._extract_json_from_text(modified) or {}
             is_zh = any('\u4e00' <= c <= '\u9fff' for c in modified.get("title", ""))
             modified["session_id"] = sid
-            self._save_result(modified, sid, is_zh)
+            # 【优化】移除手动调用 self._save_result，依靠 Orchestrator 自动保存
             return {"payload": modified, "requires_intervention": False, "stage_completed": True}
+
+        # 处理确认续写或删除续写的结果，更新script_genenration和character_design数据结构，并保存最终结果
+        if intervention and intervention.get("action") in ["confirm_continue", "delete_continue"]:
+            import copy
+            final_data = copy.deepcopy(input_data)
+            sid = final_data.get("session_id", "")
+            
+            if intervention.get("action") == "confirm_continue":
+                new_chars = final_data.get("new_characters", [])
+                new_settings = final_data.get("new_settings", [])
+                new_ep_list = final_data.get("new_episodes", [])
+                
+                # 1. 更新第一阶段剧本数据 (内存)
+                final_data.setdefault("episodes", []).extend(new_ep_list)
+                final_data.setdefault("characters", []).extend(new_chars)
+                final_data.setdefault("settings", []).extend(new_settings)
+
+                # 2. 【优化】移除显式的 _save_result 调用，编排器会根据 payload 自动保存
+
+                # 3. 同步更新跨阶段 artifacts
+                # 创建一个包含增量信息的返回结果，供 Orchestrator 钩子使用
+                result_payload = copy.deepcopy(final_data)
+                result_payload["new_characters"] = new_chars
+                result_payload["new_settings"] = new_settings
+                result_payload["new_episodes"] = new_ep_list
+
+                logger.info(f"[ScriptWriter] Confirmed continuation. Providing incremental data to Orchestrator.")
+                return {"payload": result_payload, "requires_intervention": False, "stage_completed": True}
+
+            # 处理 delete_continue
+            # 【优化】移除显式的 _save_result 调用，仅返回清理后的数据
+            for key in ["new_episodes", "new_characters", "new_settings", "sequel_idea"]:
+                final_data.pop(key, None)
+            return {"payload": final_data, "requires_intervention": False, "stage_completed": True}
+        # ---------------------------------------------------- #
+
+        async def run_smart_continue():
+            import copy
+            sid = input_data.get("session_id", "")
+            llm_model = input_data.get("llm_model", "qwen3.5-plus")
+            web_search = input_data.get("web_search", False)
+            episodes_to_add = intervention.get("episodes_to_add", 1)
+            sequel_idea = intervention.get("sequel_idea", "").strip()
+
+            from config import settings as app_settings
+            from tool.llm_client import LLM
+            llm = LLM()
+
+            def _log_progress(pct, msg):
+                self._report_progress("智能续写", msg, pct)
+                logger.info(f"[{pct}%] {msg}")
+
+            loop = asyncio.get_running_loop()
+            
+            existing_episodes_text = json.dumps(input_data.get("episodes", []), ensure_ascii=False)
+            existing_chars_text = json.dumps(input_data.get("characters", []), ensure_ascii=False)
+            existing_settings_text = json.dumps(input_data.get("settings", []), ensure_ascii=False)
+            
+            last_episode_num = 0
+            if input_data.get("episodes"):
+                last_episode_num = input_data["episodes"][-1].get("episode_number", len(input_data["episodes"]))
+
+            if not sequel_idea:
+                _log_progress(10, "生成续写灵感...")
+                idea_prompt = f"根据以下已有的剧集内容，在100字内，提供一个后续{episodes_to_add}集的简短续写灵感(主线方向): {existing_episodes_text}"
+                sequel_idea = await loop.run_in_executor(None, self._cancellable_query, llm, idea_prompt, [], llm_model, True, sid, web_search)
+                sequel_idea = sequel_idea.strip()
+
+            _log_progress(30, "正在生成续写剧本文本...")
+            prompt_name = "smart_continue_script"
+            prompt = _get_script_prompt(prompt_name, "zh").format(
+                episodes_text=existing_episodes_text,
+                chars_text=existing_chars_text,
+                settings_text=existing_settings_text,
+                episodes_to_add=episodes_to_add,
+                sequel_idea=sequel_idea,
+                start_episode_num=last_episode_num + 1
+            )
+            sequel_script_text = await loop.run_in_executor(None, self._cancellable_query, llm, prompt, [], llm_model, True, sid, web_search)
+
+            _log_progress(60, "提取新增人物/场景...")
+            meta_prompt = _get_script_prompt("meta_extract_sequel", "zh").format(
+                existing_chars=existing_chars_text,
+                existing_settings=existing_settings_text,
+                sequel_script=sequel_script_text
+            )
+            meta_raw = await loop.run_in_executor(None, self._cancellable_query, llm, meta_prompt, [], llm_model, True, sid, web_search)
+            meta_res = self._extract_json_from_text(meta_raw)
+            meta_data = meta_res if isinstance(meta_res, dict) else {}
+
+            new_chars = meta_data.get("new_characters", [])
+            new_settings = meta_data.get("new_settings", [])
+            for c in new_chars:
+                c["character_id"] = self._gen_id("char")
+            for s in new_settings:
+                s["setting_id"] = self._gen_id("set")
+
+            _log_progress(80, "结构化续写集数据...")
+            extract_prompt = _get_script_prompt("act_extract_sequel", "zh").format(
+                sequel_script=sequel_script_text,
+                start_episode_num=last_episode_num + 1,
+                episodes_to_add=episodes_to_add
+            )
+            
+            new_episodes = []
+            max_retries = 3
+            raw_acts = ""
+            for attempt in range(max_retries):
+                raw_acts = await loop.run_in_executor(None, self._cancellable_query, llm, extract_prompt, [], llm_model, True, sid, web_search)
+                parsed_acts = self._extract_json_from_text(raw_acts)
+                
+                new_episodes.clear()
+                if isinstance(parsed_acts, list):
+                    for act in parsed_acts:
+                        if isinstance(act, dict):
+                            new_episodes.append({
+                                "episode_number": act.get("episode_number"),
+                                "act_title": act.get("act_title") or f"第{act.get('episode_number')}集",
+                                "content": act.get("content", "")
+                            })
+                elif isinstance(parsed_acts, dict):
+                    act_list = parsed_acts.get("new_episodes") or parsed_acts.get("episodes") or list(parsed_acts.values())[0]
+                    if isinstance(act_list, list):
+                        for act in act_list:
+                            if isinstance(act, dict):
+                                new_episodes.append({
+                                    "episode_number": act.get("episode_number"),
+                                    "act_title": act.get("act_title") or f"第{act.get('episode_number')}集",
+                                    "content": act.get("content", "")
+                                })
+                
+                if new_episodes:
+                    break
+                logger.warning(f"[ScriptWriter] Extraction failed on attempt {attempt+1}, retrying...")
+                _log_progress(85, f"数据解析失败，自动进行第 {attempt+1} 次重试...")
+
+            # 最终兜底：如果重试多次依然失败，直接将返回的文本全塞进一集里
+            if not new_episodes and sequel_script_text:
+                logger.error(f"[ScriptWriter] All {max_retries} attempts to parse new episodes failed.")
+                new_episodes.append({
+                    "episode_number": last_episode_num + 1,
+                    "act_title": f"第{last_episode_num + 1}集 续集",
+                    "content": sequel_script_text.strip()
+                })
+
+            final_data = copy.deepcopy(input_data)
+            final_data["new_episodes"] = new_episodes
+            final_data["new_characters"] = new_chars
+            final_data["new_settings"] = new_settings
+            final_data["sequel_idea"] = sequel_idea
+            
+            is_zh = any('\u4e00' <= c <= '\u9fff' for c in final_data.get("title", "Generated Script"))
+            self._save_result(final_data, sid, is_zh)
+            _log_progress(100, "智能续写完成")
+            return final_data
+
+        if intervention and intervention.get("action") == "smart_continue":
+            result = await run_smart_continue()
+            # 设置 requires_intervention=True 以触发表单确认按钮
+            return {"payload": result, "requires_intervention": True, "stage_completed": False}
 
         async def run_logic():
             idea = input_data.get("idea", "")
@@ -167,6 +327,9 @@ class ScriptWriterAgent(AgentInterface):
             }
             
             self._save_result(final_json, sid, is_zh)
+            # 【优化】不再需要显式的 _save_result。Orchestrator 会处理 session 的保存。
+            # 如果确实需要一份独立的 script 存档，可以保留最后一次 save_result，
+            # 但为了架构统一，这里我们仅返回 final_json
             _log_progress(100, "剧本结构化解析完成！")
             return final_json
 

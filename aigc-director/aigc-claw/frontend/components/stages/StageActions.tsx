@@ -4,10 +4,10 @@ import React, { useState, useCallback } from 'react';
 import { CheckCircle, Edit3, Save, RefreshCw, Check, Loader2, Play } from 'lucide-react';
 import type { StageStatus } from './types';
 
-// 需要"继续生成"的阶段（2、4、5）
-const STAGES_WITH_CONTINUE = ['character_design', 'reference_generation', 'video_generation'];
-// 需要检查后续阶段的阶段（1、3）
-const STAGES_WITH_NEXT_CHECK = ['script_generation', 'storyboard'];
+// 需要"继续生成"的阶段（2、3、4、5）
+const STAGES_WITH_CONTINUE = ['character_design', 'storyboard', 'reference_generation', 'video_generation'];
+// 需要检查后续阶段的阶段（1）
+const STAGES_WITH_NEXT_CHECK = ['script_generation'];
 
 interface StageActionsProps {
   status: StageStatus;
@@ -18,9 +18,9 @@ interface StageActionsProps {
   onRegenerate?: () => void;
   /** 阶段ID */
   stageId?: string;
-  /** 是否有待生成的项（用于阶段2、4、5） */
+  /** 是否有待生成的项（用于阶段2、3、4、5） */
   hasPendingItems?: boolean;
-  /** 后续阶段是否已开始（用于阶段1、3） */
+  /** 后续阶段是否已开始（用于阶段1） */
   hasNextStageStarted?: boolean;
   /** 是否显示"确认并继续"按钮（后续阶段已执行过时隐藏） */
   showConfirm?: boolean;
@@ -42,9 +42,9 @@ export default function StageActions({
 }: StageActionsProps) {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-  // 是否是"继续生成"阶段（2、4、5）
+  // 是否是"继续生成"阶段（2、3、4、5）
   const isContinueStage = STAGES_WITH_CONTINUE.includes(stageId);
-  // 是否是"重新生成"阶段（1、3）
+  // 是否是"重新生成"阶段（1）
   const isRegenStage = STAGES_WITH_NEXT_CHECK.includes(stageId);
 
   // 重新生成/继续生成按钮：在 waiting / completed / error / stopped 状态下显示
@@ -80,7 +80,7 @@ export default function StageActions({
 
   return (
     <div className="border-t border-gray-200 bg-white px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0">
-      {/* 左侧：重新生成按钮 */}
+      {/* 左侧：重新生成/继续生成按钮 */}
       <div>
         {showRegen && (
           <button

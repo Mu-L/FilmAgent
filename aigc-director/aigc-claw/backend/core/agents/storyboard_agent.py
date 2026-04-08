@@ -70,8 +70,7 @@ class StoryboardAgent(AgentInterface):
             
             segments = ep.get("segments", [])
             valid_segments = []
-            
-            for seg in segments:
+            for idx, seg in enumerate(segments, 1):
                 if not isinstance(seg, dict): continue
                 
                 shots = seg.get("shots", [])
@@ -90,7 +89,7 @@ class StoryboardAgent(AgentInterface):
                     })
                 
                 valid_segments.append({
-                    "segment_id": seg.get("segment_id", str(uuid.uuid4())[:8]),
+                    "segment_id": seg.get("segment_id", f"seg_{str(idx).zfill(8)}"),
                     "segment_number": seg.get("segment_number", len(valid_segments) + 1),
                     "total_duration": seg.get("total_duration", calc_total_duration),
                     "location": seg.get("location", ""),
@@ -104,10 +103,6 @@ class StoryboardAgent(AgentInterface):
                 "segments": valid_segments
             })
         return valid_episodes
-
-    async def _continue_story(self, input_data: Dict, continue_info: Dict) -> Dict:
-        # TODO: 适配 Segment 结构的续写逻辑（暂留原始逻辑或抛错）
-        raise NotImplementedError("续写逻辑尚不支持新的嵌套 Segment 结构，请先完成基础生成。")
 
     async def process(self, input_data: Any, intervention: Optional[Dict] = None) -> Dict:
         from tool.llm_client import LLM
@@ -143,16 +138,32 @@ class StoryboardAgent(AgentInterface):
         episodes = script_data.get("episodes", [])
         if not episodes:
             raise Exception("剧本数据中不包含有效集数列表(episodes)")
-            
+
+        # 检查是否有已存在的分镜数据，识别需要生成的集数
+        existing_storyboard = session_data.get("artifacts", {}).get("storyboard", {})
+        existing_story_eps = existing_storyboard.get("episodes", [])
+        
+        # 建立已生成的 segments 索引
+        ready_eps = {e["episode_number"] for e in existing_story_eps if e.get("segments")}
+        
+        # 确定需要处理的集数：如果该集还没有 segments，则需要生成
+        episodes_to_proc = [ep for ep in episodes if ep.get("episode_number") not in ready_eps]
+        
+        if not episodes_to_proc:
+            logger.info("[Storyboard] All episodes already have storyboard segments. Skipping generation.")
+            return {"payload": {"session_id": sid, "episodes": existing_story_eps}, "stage_completed": True}
+
         chars = script_data.get("characters", [])
         sets = script_data.get("settings", [])
         is_zh = any("\u4e00" <= c <= "\u9fff" for c in script_data.get("title", ""))
         shot_prompt_tpl = _get_shot_prompt("zh" if is_zh else "en")
         
-        self._report_progress("分镜", "解析剧本并生成片段...", 5)
+        self._report_progress("分镜", f"开始生成 {len(episodes_to_proc)} 集缺失的分镜...", 5)
         
         async def proc_ep(ep):
+            # ... (保持原本处理逻辑不变)
             ep_n = ep.get("episode_number", 1)
+            # ... (以下为原本 proc_ep 逻辑)
             ep_t = ep.get("act_title", f"第{ep_n}集")
             ep_c = ep.get("content", "")
             
@@ -197,7 +208,6 @@ class StoryboardAgent(AgentInterface):
                     "segments": []
                 }
                 
-            # 兼容旧的 _validate_segments 调用（已改名为 _validate_episodes 内部的逻辑）
             # 我们直接手动处理 segments
             valid_segments = []
             for i, seg in enumerate(extracted, 1):
@@ -231,15 +241,20 @@ class StoryboardAgent(AgentInterface):
                 "segments": valid_segments
             }
 
-        # 并发处理
-        all_episodes = await asyncio.gather(*(proc_ep(ep) for ep in episodes))
-        all_episodes.sort(key=lambda x: x["episode_number"])
+        # 并发处理新增集数
+        new_story_results = await asyncio.gather(*(proc_ep(ep) for ep in episodes_to_proc))
         
-# 核心：将结果持久化到 artifacts.storyboard
-        # 现在存储的是嵌套的 episodes 结构
+        # 合并旧数据和新数据
+        updated_ep_map = {e["episode_number"]: e for e in existing_story_eps}
+        for res in new_story_results:
+            updated_ep_map[res["episode_number"]] = res
+            
+        final_all_episodes = sorted(updated_ep_map.values(), key=lambda x: x["episode_number"])
+        
+        # 核心：将结果持久化到 artifacts.storyboard
         session_data.setdefault("artifacts", {})["storyboard"] = {
             "session_id": sid, 
-            "episodes": all_episodes, 
+            "episodes": final_all_episodes, 
             "created_at": datetime.now().isoformat()
         }
         
@@ -253,4 +268,4 @@ class StoryboardAgent(AgentInterface):
             json.dump(session_data, f, indent=2, ensure_ascii=False)
             
         self._report_progress("分镜", "完成", 100)
-        return {"payload": {"session_id": sid, "episodes": all_episodes}, "stage_completed": True}
+        return {"payload": {"session_id": sid, "episodes": final_all_episodes}, "stage_completed": True}

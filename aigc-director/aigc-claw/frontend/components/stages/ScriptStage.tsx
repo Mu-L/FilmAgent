@@ -122,6 +122,21 @@ export default function ScriptStage({ state, onConfirm, onIntervene, onRegenerat
   const [editData, setEditData] = useState<ScriptData>({});
   const [rawText, setRawText] = useState('');
 
+  const [showSmartContinueDialog, setShowSmartContinueDialog] = useState(false);
+  const [smartContinueEpisodes, setSmartContinueEpisodes] = useState<number>(1);
+  const [smartContinueIdea, setSmartContinueIdea] = useState<string>('');
+
+  const handleSmartContinueConfirm = useCallback(() => {
+    onIntervene({
+      action: 'smart_continue',
+      episodes_to_add: smartContinueEpisodes,
+      sequel_idea: smartContinueIdea
+    });
+    setShowSmartContinueDialog(false);
+    setSmartContinueIdea('');
+    setSmartContinueEpisodes(1);
+  }, [smartContinueEpisodes, smartContinueIdea, onIntervene]);
+
   const hasContent = Boolean(data.title || data.characters?.length || data.scenes?.length);
 
   const startEdit = useCallback(() => {
@@ -524,6 +539,91 @@ export default function ScriptStage({ state, onConfirm, onIntervene, onRegenerat
                 </div>
               </section>
             )}
+
+            {/* ===== 智能续写 UI ===== */}
+            {!data.new_episodes || data.new_episodes.length === 0 ? (
+              data.episodes && data.episodes.length > 0 && state.status !== 'running' && (
+                <div className="mt-8 flex justify-center">
+                  <button
+                    onClick={() => setShowSmartContinueDialog(true)}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-full shadow-md hover:shadow-lg hover:from-purple-600 hover:to-purple-700 transition-all font-medium text-sm"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    智能续写
+                  </button>
+                </div>
+              )
+            ) : (
+              <div className="mt-8 space-y-6">
+                <div className="relative flex py-5 items-center">
+                  <div className="flex-grow border-t border-purple-300 border-dashed"></div>
+                  <span className="flex-shrink-0 mx-4 text-purple-600 font-bold text-sm bg-purple-50 px-4 py-1 rounded-full shadow-sm">续集</span>
+                  <div className="flex-grow border-t border-purple-300 border-dashed"></div>
+                </div>
+                
+                {data.new_characters && data.new_characters.length > 0 && (
+                  <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 shadow-sm flex flex-col gap-3">
+                    <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2">
+                      <Users className="w-4 h-4" /> 新增角色
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      {data.new_characters.map((c: any, i: number) => (
+                        <div key={i} className="bg-white p-3 rounded-lg border border-amber-100 shadow-sm flex flex-col gap-1">
+                          <div className="font-bold text-amber-900 text-sm">{c.name} <span className="text-[10px] text-amber-600 font-normal bg-amber-100 px-1.5 py-0.5 rounded ml-1">{c.role || '配角'}</span></div>
+                          <p className="text-[11px] text-gray-600 line-clamp-2 md:line-clamp-none">{c.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {data.new_settings && data.new_settings.length > 0 && (
+                  <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200 shadow-sm flex flex-col gap-3">
+                    <h4 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
+                      <MapPin className="w-4 h-4" /> 新增场景
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      {data.new_settings.map((s: any, i: number) => (
+                        <div key={i} className="bg-white p-3 rounded-lg border border-emerald-100 shadow-sm flex flex-col gap-1">
+                          <div className="font-bold text-emerald-900 text-sm">{s.name}</div>
+                          <p className="text-[11px] text-gray-600 line-clamp-2 md:line-clamp-none">{s.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-6">
+                  {data.new_episodes.map((ep: any, i: number) => (
+                    <div key={`new-${i}`} className="bg-purple-50 border-2 border-purple-300 rounded-xl overflow-hidden shadow-md">
+                      <div className="bg-gradient-to-r from-purple-200 to-purple-100 px-4 py-3 flex items-center justify-between border-b border-purple-200/50">
+                        <h4 className="font-bold text-purple-900">第 {ep.episode_number || (data.episodes ? data.episodes.length + i + 1 : i + 1)} 集：{ep.act_title}</h4>
+                        <span className="text-[10px] font-bold text-purple-700 bg-purple-200/50 px-2 py-0.5 rounded shadow-sm tracking-wider">NEW EPISODE</span>
+                      </div>
+                      <div className="p-5 text-gray-800 whitespace-pre-wrap leading-relaxed text-[15px] bg-white/80">
+                        {ep.content}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-end gap-3 mt-4">
+                  <button
+                    onClick={() => onIntervene({ action: 'delete_continue' })}
+                    className="px-5 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm font-medium transition-colors border border-red-200"
+                  >
+                    删除新剧集
+                  </button>
+                  <button
+                    onClick={() => onIntervene({ action: 'confirm_continue' })}
+                    className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg text-sm font-medium hover:from-purple-700 hover:to-purple-800 transition-colors shadow-sm"
+                  >
+                    <Save className="w-4 h-4" />
+                    保存新剧集
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -674,6 +774,67 @@ export default function ScriptStage({ state, onConfirm, onIntervene, onRegenerat
           hasNextStageStarted={hasNextStageStarted}
           isRunning={isRunning}
         />
+      )}
+
+      {/* ===== 智能续写弹窗 ===== */}
+      {showSmartContinueDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm shadow-2xl transition-opacity duration-200">
+          <div className="bg-white rounded-2xl w-[480px] p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-gray-800 mb-5 flex items-center gap-2 border-b border-gray-100 pb-3">
+              <Sparkles className="w-5 h-5 text-purple-500" />
+              智能续写设置
+            </h3>
+            
+            <div className="space-y-5">
+              <div>
+                <label className="block text-[13px] font-bold text-gray-600 mb-2 uppercase tracking-wide">一次续写剧集数</label>
+                <div className="flex gap-3">
+                  {[1, 2, 3].map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => setSmartContinueEpisodes(num)}
+                      className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-sm transition-all border outline-none ${
+                        smartContinueEpisodes === num 
+                          ? 'bg-purple-50 border-purple-500 text-purple-700 shadow-[0_0_0_2px_rgba(168,85,247,0.1)]'
+                          : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300'
+                      }`}
+                    >
+                      {num} 集
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[13px] font-bold text-gray-600 mb-2 flex items-center gap-2">
+                  后续剧情想法主线 <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">(可选)</span>
+                </label>
+                <textarea 
+                  value={smartContinueIdea}
+                  onChange={(e) => setSmartContinueIdea(e.target.value)}
+                  placeholder="如果留空，AI 将自动为您生成后续的续写灵感主线。"
+                  className="w-full h-32 border border-gray-200 rounded-xl p-3 text-[14px] text-gray-700 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-500/20 resize-none transition-all placeholder:text-gray-400 bg-gray-50/50 focus:bg-white"
+                ></textarea>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-8">
+              <button 
+                onClick={() => setShowSmartContinueDialog(false)}
+                className="px-5 py-2.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl text-sm font-bold transition-colors outline-none"
+              >
+                取消
+              </button>
+              <button 
+                onClick={handleSmartContinueConfirm}
+                className="px-6 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl text-sm font-bold hover:from-purple-600 hover:to-purple-700 transition-all shadow-md group flex items-center justify-center gap-2 outline-none hover:shadow-lg"
+              >
+                <Sparkles className="w-4 h-4 opacity-70" />
+                确认生成
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
