@@ -27,7 +27,7 @@ class Gemini:
         :param api_key: Gemini API Key
         """
         # 确保 base_url 以 /v1 结尾
-        default_url = "http://35.164.11.19:3887/v1"
+        default_url = "https://generativelanguage.googleapis.com/v1beta"
         self.base_url = base_url or os.getenv("GOOGLE_GEMINI_BASE_URL", default_url)
         if self.base_url and not self.base_url.endswith("/v1"):
             self.base_url = self.base_url.rstrip("/") + "/v1"
@@ -104,9 +104,7 @@ if __name__ == "__main__":
         print("✗ GEMINI_API_KEY 未设置，跳过")
         sys.exit(1)
     print(f"  API Key: {api_key[:6]}***")
-    # 实际使用的 URL（会自动添加 /v1）
-    actual_url = base_url if base_url and base_url.endswith("/v1") else (base_url + "/v1" if base_url else "http://35.164.11.19:3887/v1")
-    print(f"  Base URL: {actual_url}")
+    print(f"  Base URL: {base_url}")
     client = Gemini(api_key=api_key, base_url=base_url)
     prompt = "用一句话介绍你自己。"
     print(f"  Prompt: {prompt}")

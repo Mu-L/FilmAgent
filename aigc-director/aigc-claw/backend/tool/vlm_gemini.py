@@ -27,7 +27,7 @@ class GeminiVLClient:
         :param base_url: 自定义 Base URL（可选，用于代理）
         """
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        default_url = "http://35.164.11.19:3887/v1"
+        default_url = "https://generativelanguage.googleapis.com/v1beta"
         self.base_url = base_url or os.getenv("GOOGLE_GEMINI_BASE_URL", default_url)
         if self.base_url and not self.base_url.endswith("/v1"):
             self.base_url = self.base_url.rstrip("/") + "/v1"
