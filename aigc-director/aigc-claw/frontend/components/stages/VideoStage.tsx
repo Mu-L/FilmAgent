@@ -16,7 +16,7 @@ interface ClipItem {
   duration?: number;      // 视频时长（秒）
   selected: string;       // 当前选中的视频路径
   versions: string[];     // 所有历史版本路径
-  status?: 'pending' | 'done' | 'failed';
+  status?: 'pending' | 'done' | 'failed' | 'running';
 }
 
 /* ─── 水平滚动视频画廊 ─── */

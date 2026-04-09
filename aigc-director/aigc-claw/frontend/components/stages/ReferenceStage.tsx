@@ -16,7 +16,7 @@ interface SceneItem {
   description: string;    // 视觉提示词
   selected: string;       // 当前选中的文件路径
   versions: string[];     // 所有历史版本路径
-  status?: 'pending' | 'done' | 'failed';
+  status?: 'pending' | 'done' | 'failed' | 'running';
 }
 
 /* ─── 水平滚动图片画廊 ─── */
