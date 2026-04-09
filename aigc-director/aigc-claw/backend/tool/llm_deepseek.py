@@ -19,6 +19,7 @@ class DeepSeek:
             base_url=self.base_url
         )
         self.max_attempts = 3
+        self.max_tokens = 8000
 
     def query(self, prompt, image_urls=[], model="deepseek-chat", web_search=False):
         """
@@ -39,7 +40,8 @@ class DeepSeek:
                 request_params = {
                     "model": model,
                     "messages": messages,
-                    "stream": False
+                    "stream": False,
+                    "max_tokens": self.max_tokens
                 }
 
                 response = self.client.chat.completions.create(**request_params)

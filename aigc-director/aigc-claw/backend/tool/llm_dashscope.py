@@ -39,6 +39,7 @@ class QwenLLM:
             dashscope.api_key = self.api_key
 
         self.max_attempts = 3
+        self.max_tokens = 4096
 
     def query(self, prompt: str, image_urls: list = None, model: str = "qwen3.5-vl", web_search: bool = False):
         """
@@ -76,7 +77,8 @@ class QwenLLM:
                     "model": api_model,
                     "messages": messages,
                     "result_format": "message",
-                    "stream": False
+                    "stream": False,
+                    "max_tokens": self.max_tokens
                 }
                 # Add web search if enabled
                 if web_search:

@@ -2,25 +2,37 @@ You are a professional script analyst. Below is the complete full script text:
 
 {script_text}
 
-Please extract the following information, specifically building the [Global Asset Tone (Core Characters and Main Settings)]. Their appearances and layouts will remain unchanged throughout the drama. Additionally, tell me how many total episodes and their titles.
-Output ONLY pure JSON format (direct JSON, no ``` wrappers, no extra text):
+[Design Requirements (Strictly Follow)]:
+1. **Output Format**: Must and only output a pure JSON object. Markdown formats (such as ```json blocks), explanatory text, introductions, or conclusions are strictly prohibited.
+2. **Extraction Object**: Extract all [Characters] and [Settings] that appear in the script with dialogues or key actions. Ignore group/extra characters.
+3. **Character Description**:
+   - Use the "age + gender + hairstyle/jewelry + clothing + body type + facial features/expression" format.
+   - Core Features: Must include hairstyle, body type, clothing color and style, etc.
+   - Prohibition: No sci-fi or fantasy elements; appearance must be normal.
+   - Style: 30-50 words, plain and direct language, no metaphors or literary rhetoric.
+4. **Setting Description**:
+   - Use the "space type + lighting direction and color + core furniture/decor (texture/material) + atmosphere" format.
+   - Style: 30-50 words, concrete and shootable description.
+   - Example: "Modern minimalist office, cold moonlight spills through floor-to-ceiling windows, the desk is cold-toned solid wood, atmosphere is quiet and serious."
+
+---
+[Output Format Example (ONLY return this JSON object)]:
 {{
-  "title": "Story Title (2-8 words)",
-  "logline": "Complete story synopsis (100-200 words)",
-  "total_episodes": 4, // Actual total number of episodes present in text
+  "title": "Story Title",
+  "logline": "One-sentence story outline",
   "genre": ["genre1", "genre2"],
   "mood": "Emotional tone",
   "characters": [
     {{
       "name": "Full name of protagonist/major supporting character",
-      "description": "Appearance: age+gender+hairstyle/jewelry+clothing+body type+facial features. Must be objective visual description, no metaphors, 30-50 words.",
+      "description": "Appearance description, requirements see [Design Requirements]",
       "species": "Human or specific animal species"
     }}
   ],
   "settings": [
     {{
-      "name": "Main Setting Name (Int) or (Ext)",
-      "description": "General setting description: core functional areas, main furniture/objects, spatial perception, color palette and lighting. No characters, 30-50 words."
+      "name": "Specific Setting Name",
+      "description": "General setting description, requirements see [Design Requirements]"
     }}
   ]
 }}
