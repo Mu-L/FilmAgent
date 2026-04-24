@@ -219,7 +219,7 @@ API 返回的资产路径使用相对路径格式：`code/result/...`
 
 ```bash
 # LLM 配置（剧本生成）
-LLM_MODEL=qwen3.6-max-preview
+LLM_MODEL=deepseek-v3.2
 
 # VLM 配置（图像评估）
 VLM_MODEL=qwen3.6-plus

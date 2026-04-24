@@ -327,7 +327,7 @@ clawhub install aigc-director
 
 ```bash
 # LLM 配置
-LLM_MODEL=qwen3.6-max-preview
+LLM_MODEL=deepseek-v3.2
 VLM_MODEL=qwen3.6-plus
 
 # 图像生成
