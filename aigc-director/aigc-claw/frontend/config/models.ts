@@ -138,6 +138,7 @@ export const VIDEO_PROVIDERS: ProviderGroup[] = [
         models: [
             { id: 'wan2.7-i2v', label: 'wan2.7-i2v', default: true },
             { id: 'wan2.6-i2v-flash', label: 'wan2.6-i2v-flash' },
+            { id: 'happyhorse-1.0-i2v', label: 'happyhorse-1.0-i2v' },
         ],
     },
     {

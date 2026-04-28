@@ -205,6 +205,13 @@
       "concurrency": 5,
       "price_per_second": 0.8
     },
+    "happyhorse-1.0-i2v": {
+      "name": "Happy Horse 1.0 I2V",
+      "provider": "dashscope",
+      "type": ["video"],
+      "concurrency": 5,
+      "price_per_second": 1.0
+    },
     "kling-v3": {
       "name": "Kling V3",
       "provider": "kling",

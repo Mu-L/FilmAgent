@@ -1,7 +1,7 @@
 """
 统一视频生成客户端
 根据 model 名称自动路由到对应后端：
-  - wan*      → WanVideoClient (DashScope VideoSynthesis)
+  - wan*      → DashscopeVideoClient (DashScope VideoSynthesis)
   - jimeng*   → JiMengClient (火山引擎即梦)
   - kling*    → KlingVideoClient (可灵 AI)
 """
@@ -12,12 +12,12 @@ from typing import Optional
 from config import Config
 
 try:
-    from tool.video_wan import WanVideoClient
+    from tool.video_dashscope import DashscopeVideoClient
     from tool.image_jimeng import JiMengClient
     from tool.video_kling import KlingVideoClient
     from tool.video_seedance import SeedanceVideoClient
 except ImportError:
-    from video_wan import WanVideoClient
+    from video_dashscope import DashscopeVideoClient
     from image_jimeng import JiMengClient
     from video_kling import KlingVideoClient
     from video_seedance import SeedanceVideoClient
@@ -43,7 +43,7 @@ class VideoClient:
         kling_base_url: Optional[str] = None,
     ):
         # 万象客户端
-        self.wan_client = WanVideoClient(
+        self.Dashscope_client = DashscopeVideoClient(
             api_key=dashscope_api_key,
             base_url=dashscope_base_url,
         )
@@ -121,8 +121,10 @@ class VideoClient:
             return self._generate_kling(prompt, image_path, save_path, model, duration, sound)
         elif "seedance" in model_lower:
             return self._generate_seedance(prompt, image_path, save_path, model, duration)
-        else:
+        elif "wan" in model_lower or "happyhorse" in model_lower:
             return self._generate_wan(prompt, image_path, save_path, model, duration, shot_type)
+        else:
+            raise ValueError(f"未知的视频生成模型: {model}")
 
     def _generate_wan(
         self,
@@ -135,7 +137,7 @@ class VideoClient:
     ) -> str:
         """通过万象模型生成视频"""
         logger.info(f"VideoClient: 路由至万象 model={model}")
-        return self.wan_client.generate_video(
+        return self.Dashscope_client.generate_video(
             prompt=prompt,
             image_path=image_path,
             save_path=save_path,

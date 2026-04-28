@@ -16,7 +16,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-class WanVideoClient:
+class DashscopeVideoClient:
     """
     阿里云通义万象视频生成客户端
     使用 dashscope SDK 的 VideoSynthesis 接口
@@ -68,9 +68,9 @@ class WanVideoClient:
         abs_img = os.path.abspath(image_path)
         img_url = f"file://{abs_img}"
 
-        logger.info(f"WanVideoClient: model={model}, prompt={prompt[:60]}...")
+        logger.info(f"DashscopeVideoClient: model={model}, prompt={prompt[:60]}...")
 
-        if model.startswith("wan2.7"):
+        if model.startswith("wan2.7") or "happyhorse" in model:
             # wan2.7 series use the new API format with 'media'
             media = [{"type": "first_frame", "url": img_url}]
             rsp = VideoSynthesis.call(
@@ -79,6 +79,7 @@ class WanVideoClient:
                 prompt=prompt,
                 media=media,
                 duration=duration,
+                watermark=False,
             )
         else:
             # Older models (wan2.1, wan2.6 etc.) use 'img_url' and 'shot_type'
@@ -102,7 +103,7 @@ class WanVideoClient:
         if not video_url:
             raise RuntimeError(f"万象视频 API 返回空URL，可能生成失败: code={rsp.code}, message={rsp.message}")
 
-        logger.info(f"WanVideoClient: 视频生成成功: {video_url}")
+        logger.info(f"DashscopeVideoClient: 视频生成成功: {video_url}")
 
         # 确保输出目录存在
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -117,7 +118,7 @@ class WanVideoClient:
                 if chunk:
                     f.write(chunk)
 
-        logger.info(f"WanVideoClient: 视频已保存: {save_path}")
+        logger.info(f"DashscopeVideoClient: 视频已保存: {save_path}")
         return video_url
 
 
@@ -130,14 +131,15 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     # ── 测试参数（按需修改） ──
-    IMAGE_PATH = "code/result/image/test_avail/test_input.png"
-    OUTPUT_PATH = "code/result/video/test_avail/wan_test_output.mp4"
-    PROMPT = "一个赛博朋克风格的城市，霓虹灯闪烁，下着雨"
-    MODEL = "wan2.7-i2v"  # wan2.1-i2v-720p / wan2.1-i2v-480p
+    IMAGE_PATH = "code/result/image/test_avail/test_input_human.jpg"
+    OUTPUT_DIR = "code/result/video/test_avail"
+    PROMPT = "女人把报表交给男人，男人看清楚报表上的数据，露出满意的微笑，办公室背景，写实风格，高清细节。背景音乐：轻快的电子乐，节奏感强，适合办公环境。"
+    # MODELS = ["wan2.7-i2v", "wan2.6-i2v-flash", "happyhorse-1.0-i2v"]
+    MODELS = ["happyhorse-1.0-i2v"]
     DURATION = 5               # 5 / 10
     SHOT_TYPE = "multi"        # single / multi
 
-    print("=== 万象 (Wan) 视频客户端可用性测试 ===")
+    print("=== Dashscope 视频客户端可用性测试 ===")
     ak = Config.DASHSCOPE_API_KEY
     base_url = Config.DASHSCOPE_BASE_URL
     if not ak:
@@ -148,36 +150,39 @@ if __name__ == "__main__":
         print(f"✗ 输入图片不存在: {IMAGE_PATH}")
         sys.exit(1)
 
-    print(f"  API Key    : {ak[:6]}***{ak[-4:]}")
-    print(f"  Base URL   : {base_url}")
-    print(f"  输入图片   : {IMAGE_PATH}")
-    print(f"  输出路径   : {OUTPUT_PATH}")
-    print(f"  模型       : {MODEL}")
-    print(f"  时长       : {DURATION}s")
-    print(f"  镜头类型   : {SHOT_TYPE}")
-    if PROMPT:
-        print(f"  提示词     : {PROMPT[:80]}")
-    print("-" * 40)
+    for model in MODELS:
+        output_path = os.path.join(OUTPUT_DIR, f"{model}.mp4")
+        print(f"\n测试模型: {model}")
+        print(f"  API Key    : {ak[:6]}***{ak[-4:]}")
+        print(f"  Base URL   : {base_url}")
+        print(f"  输入图片   : {IMAGE_PATH}")
+        print(f"  输出路径   : {output_path}")
+        print(f"  模型       : {model}")
+        print(f"  时长       : {DURATION}s")
+        print(f"  镜头类型   : {SHOT_TYPE}")
+        if PROMPT:
+            print(f"  提示词     : {PROMPT[:80]}")
+        print("-" * 40)
 
-    try:
-        client = WanVideoClient(api_key=ak, base_url=base_url)
-        print("✓ 客户端初始化成功")
-        
-        start = time.time()
-        video_url = client.generate_video(
-            prompt=PROMPT,
-            image_path=IMAGE_PATH,
-            save_path=OUTPUT_PATH,
-            model=MODEL,
-            duration=DURATION,
-            shot_type=SHOT_TYPE,
-        )
-        elapsed = time.time() - start
+        try:
+            client = DashscopeVideoClient(api_key=ak, base_url=base_url)
+            print("✓ 客户端初始化成功")
+            
+            start = time.time()
+            video_url = client.generate_video(
+                prompt=PROMPT,
+                image_path=IMAGE_PATH,
+                save_path=output_path,
+                model=model,
+                duration=DURATION,
+                shot_type=SHOT_TYPE,
+            )
+            elapsed = time.time() - start
 
-        print(f"✓ 视频生成完成！耗时 {elapsed:.1f}s")
-        print(f"  远端 URL : {video_url}")
-        print(f"  本地文件 : {os.path.abspath(OUTPUT_PATH)}")
-        print(f"  文件大小 : {os.path.getsize(OUTPUT_PATH) / 1024 / 1024:.2f} MB")
-    except Exception as e:
-        print(f"✗ 失败: {e}")
-        sys.exit(1)
+            print(f"✓ 视频生成完成！耗时 {elapsed:.1f}s")
+            print(f"  远端 URL : {video_url}")
+            print(f"  本地文件 : {os.path.abspath(output_path)}")
+            print(f"  文件大小 : {os.path.getsize(output_path) / 1024 / 1024:.2f} MB")
+        except Exception as e:
+            print(f"✗ 失败: {e}")
+            sys.exit(1)
