@@ -4,14 +4,17 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   CheckCircle,
+  Clapperboard,
   Clock,
   Image as ImageIcon,
   Loader2,
   Play,
   RefreshCw,
+  Repeat2,
   Settings2,
   SlidersHorizontal,
   Upload,
+  UserRound,
   Video,
   Volume2,
   X,
@@ -40,6 +43,7 @@ import {
   VIDEO_RATIOS,
   type ProviderGroup,
 } from '@/config/models';
+import BrandHeader from '@/components/BrandHeader';
 
 type PipelineId = 'standard' | 'action_transfer' | 'digital_human';
 
@@ -64,6 +68,12 @@ const STATUS_STYLE: Record<string, string> = {
   running: 'bg-blue-50 text-blue-600',
   completed: 'bg-green-50 text-green-600',
   failed: 'bg-red-50 text-red-600',
+};
+
+const PIPELINE_TITLE_ICONS = {
+  standard: Clapperboard,
+  action_transfer: Repeat2,
+  digital_human: UserRound,
 };
 
 function SelectField({
@@ -297,6 +307,35 @@ function taskTitle(task: PipelineTask) {
   return input.title || input.goods_title || input.text || input.prompt_text || input.goods_text || task.task_id;
 }
 
+type PipelineArtifact = NonNullable<PipelineTask['artifacts']>[number];
+
+function isFinalVideoArtifact(item: PipelineArtifact) {
+  if (item.kind !== 'video') return false;
+  const name = (item.name || '').toLowerCase();
+  const path = (item.path || '').toLowerCase();
+  return name === 'final' || path.endsWith('/final.mp4') || path.endsWith('\\final.mp4');
+}
+
+function FinalVideoResult({ item }: { item?: PipelineArtifact }) {
+  return (
+    <section className="mb-4 rounded-xl border border-blue-100 bg-blue-50/40 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <Video className="w-4 h-4 text-blue-600" />
+        <h3 className="text-sm font-semibold text-gray-800">最终视频</h3>
+      </div>
+      {item ? (
+        <div className="overflow-hidden rounded-lg border border-gray-200 bg-black">
+          <video src={assetHref(item.path)} controls className="w-full max-h-72 object-contain" />
+        </div>
+      ) : (
+        <div className="h-36 rounded-lg border border-dashed border-blue-200 bg-white/60 flex items-center justify-center text-sm text-gray-400">
+          最终视频生成后显示
+        </div>
+      )}
+    </section>
+  );
+}
+
 function TaskResult({ task }: { task: PipelineTask | null }) {
   const progress = Math.max(0, Math.min(100, task?.progress || 0));
 
@@ -321,9 +360,11 @@ function TaskResult({ task }: { task: PipelineTask | null }) {
   }
 
   const artifacts = task.artifacts || [];
+  const finalVideoArtifact = artifacts.find(isFinalVideoArtifact);
   const mediaArtifacts = artifacts
     .map((item, index) => ({ ...item, orderIndex: index }))
     .filter(item => ['audio', 'image', 'video'].includes(item.kind))
+    .filter(item => !isFinalVideoArtifact(item))
     .sort((a, b) => {
       const aTime = a.created_at ? Date.parse(a.created_at) : Number.NaN;
       const bTime = b.created_at ? Date.parse(b.created_at) : Number.NaN;
@@ -363,8 +404,14 @@ function TaskResult({ task }: { task: PipelineTask | null }) {
         />
       </div>
 
+      <FinalVideoResult item={finalVideoArtifact} />
+
       {mediaArtifacts.length > 0 ? (
         <div className="max-h-[28rem] overflow-y-auto pr-1">
+          <div className="mb-2 flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4 text-gray-400" />
+            <h3 className="text-sm font-semibold text-gray-700">中间产物</h3>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {mediaArtifacts.map((item, index) => (
               <div
@@ -518,6 +565,7 @@ function PipelineHistory({
 }
 
 export default function PipelinePage({ pipeline, title, subtitle }: PipelinePageProps) {
+  const TitleIcon = PIPELINE_TITLE_ICONS[pipeline];
   const [showSettings, setShowSettings] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
@@ -528,6 +576,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
   const [text, setText] = useState('');
   const [standardMode, setStandardMode] = useState<'inspiration' | 'copy'>('inspiration');
   const [titleValue, setTitleValue] = useState('');
+  const [standardSegmentCount, setStandardSegmentCount] = useState(6);
   const [enableSubtitles, setEnableSubtitles] = useState(false);
   const [promptText, setPromptText] = useState('');
   const [imagePath, setImagePath] = useState('');
@@ -645,6 +694,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
             tts_voice: ttsVoice,
             tts_speed: ttsSpeed,
             style_control: negativePrompt || undefined,
+            segment_count: standardMode === 'inspiration' ? standardSegmentCount : undefined,
           })
         : pipeline === 'action_transfer'
           ? await startActionTransferPipeline({
@@ -677,10 +727,12 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
 
   return (
     <div className="min-h-screen bg-gray-50/50 overflow-y-auto">
-      <div className="w-full max-w-6xl mx-auto px-6 pt-16 pb-8">
+      <BrandHeader />
+
+      <div className="w-full max-w-6xl mx-auto px-6 pt-10 pb-8">
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 mb-3">
-            <Play className="w-7 h-7 text-blue-500" />
+            <TitleIcon className="w-7 h-7 text-blue-500" />
             <h1 className="text-2xl font-bold text-gray-800">{title}</h1>
           </div>
           <p className="text-sm text-gray-500">{subtitle}</p>
@@ -712,6 +764,9 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <TextInput label="标题" value={titleValue} onChange={setTitleValue} placeholder="可选，留空时由llm生成" />
+                  {standardMode === 'inspiration' && (
+                    <NumberField label="片段数量" value={standardSegmentCount} onChange={setStandardSegmentCount} min={1} max={20} />
+                  )}
                 </div>
               </div>
             )}
