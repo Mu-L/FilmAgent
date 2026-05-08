@@ -42,6 +42,7 @@
 - `2026/4/6`: 🎭 AIGC-Claw v2 was released, optimized for short drama generation.
 - `2026/4/9`: ♾️ AIGC-Claw v3 was released, adding infinite continuation and customizable plot development.
 - `2026/4/29`: 🧩 Added three one-shot Pipelines: Artistic Short Video, Action Transfer, and Digital Human Talking Video, together with one-click installation.
+- `2026/5/8`: ⚙️ Added WebUI configuration for API keys and default models, with one-click installation support.
 
 
 ## 📖 Overview
