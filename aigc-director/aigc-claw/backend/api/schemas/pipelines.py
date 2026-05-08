@@ -10,8 +10,8 @@ class StandardPipelineRequest(BaseModel):
     segment_count: Optional[int] = Field(None, ge=1, le=20, description="Target narration segment count for inspiration mode")
     n_scenes: int = 5
     split_mode: str = "paragraph"
-    llm_model: Optional[str] = None
-    image_model: Optional[str] = None
+    llm_model: str
+    image_model: str
     video_model: Optional[str] = None
     video_mode: str = Field("image_concat", description="image_concat or dynamic_video")
     video_ratio: str = "9:16"
@@ -33,7 +33,7 @@ class ActionTransferPipelineRequest(BaseModel):
     prompt_text: str
     image_path: str
     video_path: str
-    video_model: str = "wan2.7-videoedit"
+    video_model: str
     duration: int = 5
     video_ratio: str = "9:16"
     resolution: Optional[str] = None
@@ -48,10 +48,10 @@ class DigitalHumanPipelineRequest(BaseModel):
     goods_image_path: Optional[str] = None
     goods_title: Optional[str] = None
     goods_text: Optional[str] = None
-    llm_model: Optional[str] = None
-    image_model: Optional[str] = None
+    llm_model: str
+    image_model: str
     image_resolution: str = "1080P"
-    video_model: str = "wan2.7-r2v"
+    video_model: str
     duration: int = 5
     video_ratio: str = "9:16"
     resolution: Optional[str] = None

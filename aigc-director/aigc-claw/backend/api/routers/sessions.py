@@ -38,8 +38,8 @@ async def cleanup_orphan_files():
     # 清理孤立剧本
     script_dir = os.path.join(result_base, 'script')
     for f in os.listdir(script_dir):
-        if f.startswith('script_') and f.endswith('.json'):
-            sid = f.replace('script_', '').replace('.json', '')
+        if f.endswith('.json'):
+            sid = f[:-5]
             if sid not in session_ids:
                 os.remove(os.path.join(script_dir, f))
                 cleaned["scripts"].append(sid)
@@ -61,4 +61,3 @@ async def cleanup_orphan_files():
             cleaned["videos"].append(d)
 
     return {"status": "cleaned", "cleaned": cleaned}
-

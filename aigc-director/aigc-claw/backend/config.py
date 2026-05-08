@@ -1,106 +1,290 @@
-import os
+import copy
 import logging
+import os
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-# 尝试加载 .env 文件 (需要: pip install python-dotenv)
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+import yaml
 
 logger = logging.getLogger(__name__)
 
+BASE_DIR = Path(__file__).resolve().parent
+CONFIG_PATH = BASE_DIR / "config.yaml"
+CONFIG_EXAMPLE_PATH = BASE_DIR / "config.yaml.example"
+
+DEFAULT_CONFIG: Dict[str, Any] = {
+    "project_name": "AIGC-Claw",
+    "server": {
+        "host": "127.0.0.1",
+        "port": 8000,
+        "debug": False,
+    },
+    "api_providers": {
+        "common": {
+            "print_model_input": False,
+            "proxy": "",
+        },
+        "openai": {
+            "api_key": "",
+            "base_url": "https://api.openai.com/v1",
+            "enable_proxy": False,
+        },
+        "gemini": {
+            "api_key": "",
+            "base_url": "https://generativelanguage.googleapis.com/v1beta",
+            "enable_proxy": False,
+        },
+        "deepseek": {
+            "api_key": "",
+            "base_url": "https://api.deepseek.com/v1",
+            "enable_proxy": False,
+        },
+        "dashscope": {
+            "api_key": "",
+            "base_url": "https://dashscope.aliyuncs.com/api/v1",
+            "enable_proxy": False,
+        },
+        "ark": {
+            "api_key": "",
+            "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+            "enable_proxy": False,
+        },
+        "kling": {
+            "base_url": "https://api-beijing.klingai.com",
+            "access_key": "",
+            "secret_key": "",
+            "enable_proxy": False,
+        },
+    },
+    "models": {
+        "llm": "qwen3.5-plus",
+        "vlm": "qwen3.5-plus",
+        "image_it2i": "doubao-seedream-5-0-260128",
+        "image_t2i": "doubao-seedream-5-0-260128",
+        "video": "wan2.7-i2v",
+        "video_ratio": "16:9",
+        "eval": "qwen3.5-plus",
+    },
+}
+
+
+def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    merged = copy.deepcopy(base)
+    for key, value in (override or {}).items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _get(data: Dict[str, Any], path: str, default: Any = None) -> Any:
+    current: Any = data
+    for part in path.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return default
+        current = current[part]
+    return current
+
+
+def _coerce_config(data: Dict[str, Any]) -> Dict[str, Any]:
+    clean = _deep_merge(DEFAULT_CONFIG, data)
+    clean.pop("llm", None)
+
+    server = clean["server"]
+    server["host"] = str(server.get("host") or DEFAULT_CONFIG["server"]["host"])
+    try:
+        server["port"] = int(server.get("port"))
+    except (TypeError, ValueError):
+        server["port"] = DEFAULT_CONFIG["server"]["port"]
+    server["debug"] = _as_bool(server.get("debug"))
+    server.pop("admin_password", None)
+
+    common = clean["api_providers"]["common"]
+    for key in ("local_proxy", "http_proxy", "https_proxy"):
+        common.pop(key, None)
+    common["print_model_input"] = _as_bool(common.get("print_model_input"))
+    common["proxy"] = str(common.get("proxy") or "")
+
+    if isinstance(clean["models"].get("llm"), dict):
+        clean["models"]["llm"] = clean["models"]["llm"].get("model") or DEFAULT_CONFIG["models"]["llm"]
+
+    for key, value in clean["models"].items():
+        if isinstance(value, dict):
+            for sub_key, sub_value in value.items():
+                value[sub_key] = "" if sub_value is None else str(sub_value)
+        else:
+            clean["models"][key] = "" if value is None else str(value)
+
+    for provider, values in clean["api_providers"].items():
+        if provider == "common":
+            continue
+        for key, value in values.items():
+            if key == "enable_proxy":
+                values[key] = _as_bool(value)
+            else:
+                values[key] = "" if value is None else str(value)
+
+    return clean
+
+
+def _as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def load_config() -> Dict[str, Any]:
+    if not CONFIG_PATH.exists():
+        source = CONFIG_EXAMPLE_PATH if CONFIG_EXAMPLE_PATH.exists() else None
+        if source:
+            with source.open("r", encoding="utf-8") as f:
+                loaded = yaml.safe_load(f) or {}
+            return _coerce_config(loaded)
+        return copy.deepcopy(DEFAULT_CONFIG)
+
+    with CONFIG_PATH.open("r", encoding="utf-8") as f:
+        loaded = yaml.safe_load(f) or {}
+    if not isinstance(loaded, dict):
+        raise ValueError("backend/config.yaml must contain a YAML mapping.")
+    return _coerce_config(loaded)
+
+
+def save_config(values: Dict[str, Any]) -> Dict[str, Any]:
+    clean = _coerce_config(values)
+    with CONFIG_PATH.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(clean, f, allow_unicode=True, sort_keys=False)
+    return clean
+
+
+CONFIG_VALUES = load_config()
+
+
 class Config:
-    # ==========================
-    # 基础服务配置
-    # ==========================
-    HOST = os.getenv("HOST", "0.0.0.0")
-    PORT = int(os.getenv("PORT", 8000))
-    DEBUG = os.getenv("DEBUG", "True").lower() == "true"
-    
-    # 控制是否打印发送给模型的提示词/输入 (LLM, Image, Video)
-    PRINT_MODEL_INPUT = os.getenv("PRINT_MODEL_INPUT", "False").lower() == "true"
-    
-    # ==========================
-    # 路径配置 (自动计算绝对路径)
-    # ==========================
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    
-    # 生成结果存放目录
-    CODE_DIR = os.path.join(BASE_DIR, 'code')
-    RESULT_DIR = os.path.join(CODE_DIR, 'result')
-    
-    # 临时文件目录
-    TEMP_DIR = os.path.join(BASE_DIR, 'temp')
-    
-    # 会话数据目录
-    SESSION_DIR = os.path.join(CODE_DIR, 'data', 'sessions')
+    CONFIG = CONFIG_VALUES
 
-    # 一次性 pipeline 任务数据目录
-    TASK_DIR = os.path.join(CODE_DIR, 'data', 'tasks')
-    TASK_RESULT_DIR = os.path.join(RESULT_DIR, 'task')
+    HOST = _get(CONFIG, "server.host")
+    PORT = _get(CONFIG, "server.port")
+    DEBUG = _get(CONFIG, "server.debug")
 
-    # ==========================
-    # AI 模型 API 配置
-    # ==========================
-    # LLM (OpenAI / Gemini)
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-    OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-    GOOGLE_GEMINI_BASE_URL = os.getenv("GOOGLE_GEMINI_BASE_URL", "")
+    PRINT_MODEL_INPUT = _get(CONFIG, "api_providers.common.print_model_input")
+    PROXY = _get(CONFIG, "api_providers.common.proxy")
 
-    # Dashscope(Aliyun) API
-    DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY", "")
-    DASHSCOPE_BASE_URL = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/api/v1")
+    OPENAI_API_KEY = _get(CONFIG, "api_providers.openai.api_key")
+    OPENAI_BASE_URL = _get(CONFIG, "api_providers.openai.base_url")
+    OPENAI_ENABLE_PROXY = _get(CONFIG, "api_providers.openai.enable_proxy")
+    GEMINI_API_KEY = _get(CONFIG, "api_providers.gemini.api_key")
+    GOOGLE_GEMINI_BASE_URL = _get(CONFIG, "api_providers.gemini.base_url")
+    GEMINI_ENABLE_PROXY = _get(CONFIG, "api_providers.gemini.enable_proxy")
+    DEEPSEEK_API_KEY = _get(CONFIG, "api_providers.deepseek.api_key")
+    DEEPSEEK_BASE_URL = _get(CONFIG, "api_providers.deepseek.base_url")
+    DEEPSEEK_ENABLE_PROXY = _get(CONFIG, "api_providers.deepseek.enable_proxy")
+    DASHSCOPE_API_KEY = _get(CONFIG, "api_providers.dashscope.api_key")
+    DASHSCOPE_BASE_URL = _get(CONFIG, "api_providers.dashscope.base_url")
+    DASHSCOPE_ENABLE_PROXY = _get(CONFIG, "api_providers.dashscope.enable_proxy")
+    ARK_API_KEY = _get(CONFIG, "api_providers.ark.api_key")
+    ARK_BASE_URL = _get(CONFIG, "api_providers.ark.base_url")
+    ARK_ENABLE_PROXY = _get(CONFIG, "api_providers.ark.enable_proxy")
+    KLING_ACCESS_KEY = _get(CONFIG, "api_providers.kling.access_key")
+    KLING_SECRET_KEY = _get(CONFIG, "api_providers.kling.secret_key")
+    KLING_BASE_URL = _get(CONFIG, "api_providers.kling.base_url")
+    KLING_ENABLE_PROXY = _get(CONFIG, "api_providers.kling.enable_proxy")
 
-    # 可灵 (Kling AI) API
-    KLING_ACCESS_KEY = os.getenv("KLING_ACCESS_KEY", "")
-    KLING_SECRET_KEY = os.getenv("KLING_SECRET_KEY", "")
-    KLING_BASE_URL = os.getenv("KLING_BASE_URL", "https://api-beijing.klingai.com")
+    LLM_API_KEY = DASHSCOPE_API_KEY
+    LLM_BASE_URL = ""
+    LLM_MODEL = _get(CONFIG, "models.llm")
+    VLM_MODEL = _get(CONFIG, "models.vlm")
+    IMAGE_IT2I_MODEL = _get(CONFIG, "models.image_it2i")
+    IMAGE_T2I_MODEL = _get(CONFIG, "models.image_t2i")
+    VIDEO_MODEL = _get(CONFIG, "models.video")
+    VIDEO_RATIO = _get(CONFIG, "models.video_ratio")
+    EVAL_MODEL = _get(CONFIG, "models.eval")
 
-    # 字节跳动 ARK (Seedream) API
-    ARK_API_KEY = os.getenv("ARK_API_KEY", "")
-    ARK_BASE_URL = os.getenv("ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
+    BASE_DIR = str(BASE_DIR)
+    CODE_DIR = os.path.join(BASE_DIR, "code")
+    RESULT_DIR = os.path.join(CODE_DIR, "result")
+    TEMP_DIR = os.path.join(BASE_DIR, "temp")
+    SESSION_DIR = os.path.join(CODE_DIR, "data", "sessions")
+    TASK_DIR = os.path.join(CODE_DIR, "data", "tasks")
+    TASK_RESULT_DIR = os.path.join(RESULT_DIR, "task")
 
-    # 管理员密码（用于删除历史记录等管理操作）
-    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+    @classmethod
+    def as_dict(cls) -> Dict[str, Any]:
+        return copy.deepcopy(cls.CONFIG)
 
-    # 代理设置
-    PROXY = os.getenv("PROXY", "")
-    LOCAL_PROXY = os.getenv("LOCAL_PROXY", PROXY)
-    HTTP_PROXY = os.getenv("HTTP_PROXY", PROXY)
-    HTTPS_PROXY = os.getenv("HTTPS_PROXY", PROXY)
-    
-    # ==========================
-    # 视频生成参数配置
-    # ==========================
-    # 1. 剧本生成
-    LLM_MODEL = os.getenv("LLM_MODEL", "qwen3.5-plus") # LLM 模型选择
+    @classmethod
+    def provider_proxy(cls, provider: str) -> str:
+        provider_config = _get(cls.CONFIG, f"api_providers.{provider}", {})
+        if not isinstance(provider_config, dict) or not _as_bool(provider_config.get("enable_proxy")):
+            return ""
+        return cls.PROXY or ""
 
-    # 2. VLM 评估模型
-    VLM_MODEL = os.getenv("VLM_MODEL", "qwen3.5-plus")
+    @classmethod
+    def requests_proxies(cls, provider: str) -> Optional[Dict[str, str]]:
+        proxy = cls.provider_proxy(provider)
+        if not proxy:
+            return None
+        return {"http": proxy, "https": proxy}
 
-    # 3. 图片生成 (分镜)
-    IMAGE_IT2I_MODEL = os.getenv("IMAGE_IT2I_MODEL", "doubao-seedream-5-0-260128")
-    IMAGE_T2I_MODEL = os.getenv("IMAGE_T2I_MODEL", "doubao-seedream-5-0-260128")
+    @classmethod
+    def update_config(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        clean = save_config(values)
+        cls.CONFIG = clean
 
-    # 3. 视频生成
-    # 可选: "doubao-seedance-2-0-260128", "wan2.7-i2v", "wan2.6-i2v-flash", 
-    VIDEO_MODEL = os.getenv("VIDEO_MODEL", "wan2.7-i2v")
-    VIDEO_RATIO = os.getenv("VIDEO_RATIO", "16:9") 
+        cls.HOST = _get(clean, "server.host")
+        cls.PORT = _get(clean, "server.port")
+        cls.DEBUG = _get(clean, "server.debug")
+
+        cls.PRINT_MODEL_INPUT = _get(clean, "api_providers.common.print_model_input")
+        cls.PROXY = _get(clean, "api_providers.common.proxy")
+
+        cls.OPENAI_API_KEY = _get(clean, "api_providers.openai.api_key")
+        cls.OPENAI_BASE_URL = _get(clean, "api_providers.openai.base_url")
+        cls.OPENAI_ENABLE_PROXY = _get(clean, "api_providers.openai.enable_proxy")
+        cls.GEMINI_API_KEY = _get(clean, "api_providers.gemini.api_key")
+        cls.GOOGLE_GEMINI_BASE_URL = _get(clean, "api_providers.gemini.base_url")
+        cls.GEMINI_ENABLE_PROXY = _get(clean, "api_providers.gemini.enable_proxy")
+        cls.DEEPSEEK_API_KEY = _get(clean, "api_providers.deepseek.api_key")
+        cls.DEEPSEEK_BASE_URL = _get(clean, "api_providers.deepseek.base_url")
+        cls.DEEPSEEK_ENABLE_PROXY = _get(clean, "api_providers.deepseek.enable_proxy")
+        cls.DASHSCOPE_API_KEY = _get(clean, "api_providers.dashscope.api_key")
+        cls.DASHSCOPE_BASE_URL = _get(clean, "api_providers.dashscope.base_url")
+        cls.DASHSCOPE_ENABLE_PROXY = _get(clean, "api_providers.dashscope.enable_proxy")
+        cls.ARK_API_KEY = _get(clean, "api_providers.ark.api_key")
+        cls.ARK_BASE_URL = _get(clean, "api_providers.ark.base_url")
+        cls.ARK_ENABLE_PROXY = _get(clean, "api_providers.ark.enable_proxy")
+        cls.KLING_ACCESS_KEY = _get(clean, "api_providers.kling.access_key")
+        cls.KLING_SECRET_KEY = _get(clean, "api_providers.kling.secret_key")
+        cls.KLING_BASE_URL = _get(clean, "api_providers.kling.base_url")
+        cls.KLING_ENABLE_PROXY = _get(clean, "api_providers.kling.enable_proxy")
+
+        cls.LLM_API_KEY = cls.DASHSCOPE_API_KEY
+        cls.LLM_BASE_URL = ""
+        cls.LLM_MODEL = _get(clean, "models.llm")
+        cls.VLM_MODEL = _get(clean, "models.vlm")
+        cls.IMAGE_IT2I_MODEL = _get(clean, "models.image_it2i")
+        cls.IMAGE_T2I_MODEL = _get(clean, "models.image_t2i")
+        cls.VIDEO_MODEL = _get(clean, "models.video")
+        cls.VIDEO_RATIO = _get(clean, "models.video_ratio")
+        cls.EVAL_MODEL = _get(clean, "models.eval")
+        return cls.as_dict()
 
     @classmethod
     def check_dirs(cls):
-        """自动创建必要的目录"""
-        # 确保 data 和 sessions 目录存在
-        data_dir = os.path.join(cls.CODE_DIR, 'data')
-        for directory in [cls.CODE_DIR, data_dir, cls.SESSION_DIR, cls.TASK_DIR, cls.RESULT_DIR, cls.TASK_RESULT_DIR, cls.TEMP_DIR]:
+        data_dir = os.path.join(cls.CODE_DIR, "data")
+        for directory in [
+            cls.CODE_DIR,
+            data_dir,
+            cls.SESSION_DIR,
+            cls.TASK_DIR,
+            cls.RESULT_DIR,
+            cls.TASK_RESULT_DIR,
+            cls.TEMP_DIR,
+        ]:
             if not os.path.exists(directory):
                 os.makedirs(directory, exist_ok=True)
                 logger.info("Created directory: %s", directory)
 
-# 初始化目录结构
-Config.check_dirs()
 
-# 导出一个单例
+Config.check_dirs()
 settings = Config()

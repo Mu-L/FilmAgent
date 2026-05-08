@@ -19,10 +19,28 @@ from config import settings
 
 router = APIRouter(tags=["Workflow"])
 
+REQUIRED_MODEL_FIELDS = (
+    "llm_model",
+    "vlm_model",
+    "image_t2i_model",
+    "image_it2i_model",
+    "video_model",
+)
+
+
+def _require_model_fields(values: dict) -> None:
+    missing = [field for field in REQUIRED_MODEL_FIELDS if not values.get(field)]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required model configuration: {', '.join(missing)}",
+        )
+
 
 @router.post("/api/project/start")
 async def start_project(req: ProjectStartRequest):
     final_idea = merge_uploaded_file_into_idea(req.idea, req.file_path)
+    _require_model_fields(req.model_dump())
 
     session_id = str(int(time.time() * 1000))
     state = workflow_engine.get_or_create_state(session_id)
@@ -37,11 +55,11 @@ async def start_project(req: ProjectStartRequest):
         "style": req.style or "realistic",
         "video_ratio": req.video_ratio or "9:16",
         "expand_idea": req.expand_idea if req.expand_idea is not None else True,
-        "llm_model": req.llm_model or settings.LLM_MODEL,
-        "vlm_model": req.vlm_model or settings.VLM_MODEL,
-        "image_t2i_model": req.image_t2i_model or settings.IMAGE_T2I_MODEL,
-        "image_it2i_model": req.image_it2i_model or settings.IMAGE_IT2I_MODEL,
-        "video_model": req.video_model or settings.VIDEO_MODEL,
+        "llm_model": req.llm_model,
+        "vlm_model": req.vlm_model,
+        "image_t2i_model": req.image_t2i_model,
+        "image_it2i_model": req.image_it2i_model,
+        "video_model": req.video_model,
         "enable_concurrency": req.enable_concurrency if req.enable_concurrency is not None else True,
         "web_search": req.web_search if req.web_search is not None else False,
         "episodes": req.episodes if req.episodes is not None else 4,
@@ -56,9 +74,12 @@ async def start_project(req: ProjectStartRequest):
             "idea": final_idea,
             "file_path": req.file_path,
             "style": req.style,
-            "llm_model": req.llm_model,
-            "vlm_model": req.vlm_model,
-            "episodes": req.episodes,
+            "llm_model": meta["llm_model"],
+            "vlm_model": meta["vlm_model"],
+            "image_t2i_model": meta["image_t2i_model"],
+            "image_it2i_model": meta["image_it2i_model"],
+            "video_model": meta["video_model"],
+            "episodes": meta["episodes"],
             "video_ratio": req.video_ratio,
         }
     }
@@ -78,6 +99,7 @@ async def execute_stage(session_id: str, stage: str, request: Request):
         for k, v in state.meta.items():
             if v is not None and (k not in body or not body[k]):
                 body[k] = v
+    _require_model_fields(body)
 
     inject_user_selections(state, stage, body)
     cancellation_check, on_disconnect = make_cancellation(workflow_engine, session_id)
@@ -161,7 +183,7 @@ async def update_artifact(session_id: str, stage: str, request: Request):
 
     按阶段分类处理：
     - 第二阶段(character_design): 修改 characters[]/settings[] 的 description
-    - 第三阶段(storyboard): 修改 shots[] 的 duration/plot/visual_prompt
+    - 第三阶段(storyboard): 修改 episodes[]/segments[]/shots[] 的分镜数据
     - 第四阶段(reference_generation): 修改 scenes[] 的 description（视觉提示词）
     - 第五阶段(video_generation): 修改 clips[] 的 duration/description
     """
@@ -181,18 +203,25 @@ async def update_artifact(session_id: str, stage: str, request: Request):
 
     # ══════════════════════════════════════════════════════════════
     # 第三阶段：分镜修改
-    # 修改 payload.shots[].duration / payload.shots[].plot / payload.shots[].visual_prompt
+    # 当前结构为 episodes -> segments -> shots；segments 对应一次视频模型调用
     # 同步到：video_generation.clips[].duration, video_generation.clips[].description
     # ══════════════════════════════════════════════════════════════
-    elif stage == "storyboard" and "shots" in body:
-        # 清除 is_new 标记（确认新分镜）
-        for shot in body['shots']:
-            if 'is_new' in shot:
+    elif stage == "storyboard" and any(k in body for k in ("episodes", "segments", "shots")):
+        # 兼容旧 shots 格式：清除 is_new 标记
+        for shot in body.get('shots', []):
+            if isinstance(shot, dict) and 'is_new' in shot:
                 shot['is_new'] = False
 
-        # 从 body['segments'] 提取同步信息（修改后的逻辑按 segment 同步）
+        # 从 episodes/segments 提取同步信息
+        input_segments = list(body.get('segments', []))
+        for ep in body.get('episodes', []):
+            if isinstance(ep, dict):
+                for seg in ep.get('segments', []):
+                    if isinstance(seg, dict):
+                        input_segments.append(seg)
+
         seg_info_list = []
-        for seg in body.get('segments', []):
+        for seg in input_segments:
             seg_id = seg.get('segment_id')
             if not seg_id: continue
             
@@ -203,7 +232,8 @@ async def update_artifact(session_id: str, stage: str, request: Request):
             seg_info_list.append({
                 "segment_id": seg_id,
                 "desc": desc_video,
-                "duration": total_dur
+                "duration": total_dur,
+                "visual_prompt": seg.get("visual_prompt", ""),
             })
 
         # 同步到 video_generation
@@ -217,8 +247,18 @@ async def update_artifact(session_id: str, stage: str, request: Request):
                     clip['duration'] = target['duration']
                     clip['description'] = target['desc']
 
-        # 移除 segments，避免覆盖 storyboard artifact
-        body = {k: v for k, v in body.items() if k != "segments"}
+        # 同步到 reference_generation
+        ref_art = state.artifacts.get('reference_generation', {})
+        if isinstance(ref_art, dict) and 'scenes' in ref_art:
+            for scene in ref_art['scenes']:
+                s_id = scene.get('id')
+                target = next((item for item in seg_info_list if item["segment_id"] == s_id), None)
+                if target and target.get("visual_prompt"):
+                    scene['description'] = target['visual_prompt']
+
+        # 顶层 segments 是局部 patch 结构，不覆盖完整 storyboard artifact
+        if "segments" in body and "episodes" not in body:
+            body = {k: v for k, v in body.items() if k != "segments"}
 
         # 清除 new_shot_ids 标记
         if "new_shot_ids" in body:
@@ -227,7 +267,7 @@ async def update_artifact(session_id: str, stage: str, request: Request):
     # ══════════════════════════════════════════════════════════════
     # 第四阶段：参考图提示词修改
     # 修改 scenes[].description（视觉提示词）
-    # 同步到：storyboard.shots[].visual_prompt
+    # 同步到：storyboard.episodes[].segments[].visual_prompt
     # ══════════════════════════════════════════════════════════════
     elif stage == "reference_generation":
         if "segments" in body:
@@ -279,7 +319,7 @@ async def update_artifact(session_id: str, stage: str, request: Request):
     # ══════════════════════════════════════════════════════════════
     # 第五阶段：视频片段修改
     # 修改 clips[].duration / clips[].description
-    # 同步到：storyboard.shots[].duration / storyboard.shots[].plot
+    # 同步到：storyboard.episodes[].segments[].total_duration
     # ══════════════════════════════════════════════════════════════
     elif stage == "video_generation":
         # 收集 clips 的修改
@@ -409,7 +449,7 @@ async def stop_project(session_id: str):
 @router.get("/api/project/{session_id}/scene/{scene_number}/assets")
 async def check_scene_assets(session_id: str, scene_number: int):
     state = workflow_engine.get_state(session_id)
-    result_file = os.path.join(settings.RESULT_DIR, 'script', f'script_{session_id}.json')
+    result_file = os.path.join(settings.RESULT_DIR, 'script', f'{session_id}.json')
     if not os.path.exists(result_file):
         return {"scene_number": scene_number, "reference_images": 0, "videos": 0}
 

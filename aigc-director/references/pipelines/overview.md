@@ -6,7 +6,7 @@
 
 | Pipeline | 前端名称 | API | 说明 |
 |----------|----------|-----|------|
-| `standard` | 静态短视频 | `/api/pipelines/standard/tasks` | 输入创作灵感或完整文案，生成图片、TTS、静态视频片段并拼接成片 |
+| `standard` | 文艺短视频 | `/api/pipelines/standard/tasks` | 输入创作灵感或完整文案，生成图片、TTS，并按「图片拼接 / 动态视频」模式合成成片 |
 | `action_transfer` | 动作迁移 | `/api/pipelines/action_transfer/tasks` | 输入角色图片、动作视频和提示词，调用动作迁移视频模型 |
 | `digital_human` | 数字人口播 | `/api/pipelines/digital_human/tasks` | 输入人物图片和口播文案，生成数字人口播视频 |
 
@@ -70,7 +70,7 @@ curl -X DELETE "http://localhost:8000/api/tasks/{task_id}"
 
 ## 上传媒体文件
 
-静态短视频不需要上传文件；动作迁移和数字人口播常需要上传图片或视频。
+文艺短视频不需要上传文件；动作迁移和数字人口播常需要上传图片或视频。
 
 ```bash
 curl -X POST "http://localhost:8000/api/upload_media" \
@@ -103,7 +103,8 @@ curl "http://localhost:8000/api/models?media_type=video&ability=digital_human&ve
 
 | media_type | ability | 用途 |
 |------------|---------|------|
-| `image` | `text_to_image` | 静态短视频文生图 |
+| `image` | `text_to_image` | 文艺短视频文生图 |
+| `video` | `image_to_video` | 文艺短视频动态视频模式 |
 | `image` | `reference_image` | 数字人口播商品/人物参考图 |
 | `video` | `action_transfer` | 动作迁移 |
 | `video` | `digital_human` | 数字人口播 |
@@ -114,7 +115,7 @@ curl "http://localhost:8000/api/models?media_type=video&ability=digital_human&ve
 |------|-----|
 | AIGC-Claw 主流程 | `http://localhost:3000/` |
 | 临时工作台 | `http://localhost:3000/sandbox` |
-| 静态短视频 | `http://localhost:3000/pipelines/standard` |
+| 文艺短视频 | `http://localhost:3000/pipelines/standard` |
 | 动作迁移 | `http://localhost:3000/pipelines/action-transfer` |
 | 数字人口播 | `http://localhost:3000/pipelines/digital-human` |
 

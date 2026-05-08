@@ -110,7 +110,9 @@ class StoryboardAgent(AgentInterface):
         with open(session_file, "r", encoding="utf-8") as f:
             session_data = json.load(f)
             
-        llm_model = input_data.get("llm_model") or session_data.get("llm_model") or "qwen-max"
+        llm_model = input_data.get("llm_model") or session_data.get("llm_model")
+        if not llm_model:
+            raise ValueError("Missing required model configuration: llm_model")
         style = input_data.get("style") or session_data.get("style") or "anime"
         
         # 处理人工干预/修改

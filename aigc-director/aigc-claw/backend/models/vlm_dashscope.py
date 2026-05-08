@@ -13,6 +13,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 from typing import Any, Dict, List, Optional
+from config import Config
 
 class QwenVLClient:
     def __init__(self,
@@ -23,7 +24,7 @@ class QwenVLClient:
         :param api_key: DashScope/Qwen3.5 API Key
         :param model: 模型名（如 qwen3.5-plus/qwen3.5-max 等）
         """
-        self.api_key = api_key or os.getenv("DASHSCOPE_API_KEY")
+        self.api_key = api_key or Config.DASHSCOPE_API_KEY
 
     def chat(self, text: str, images: List[str], model: str, stream: bool = False, parameters: Optional[Dict] = None, **kwargs) -> Any:
         """
@@ -72,7 +73,7 @@ if __name__ == "__main__":
     MODELS = ["qwen3.6-plus", "qwen3.6-flash", "kimi-k2.6"]
 
     print("=== Qwen VL (DashScope) 多模态可用性测试 ===")
-    api_key = getattr(Config, "DASHSCOPE_API_KEY", None) or os.getenv("DASHSCOPE_API_KEY", "")
+    api_key = Config.DASHSCOPE_API_KEY
     if not api_key:
         print("✗ DASHSCOPE_API_KEY 未设置，跳过")
         sys.exit(1)

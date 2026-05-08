@@ -59,9 +59,9 @@ install_backend() {
   info "Installing backend dependencies..."
   cd "$BACKEND_DIR"
 
-  if [ ! -f ".env" ] && [ -f ".env.example" ]; then
-    cp .env.example .env
-    warn "Created backend .env from .env.example. Fill in API keys before generating videos."
+  if [ ! -f "config.yaml" ] && [ -f "config.yaml.example" ]; then
+    cp config.yaml.example config.yaml
+    warn "Created backend config.yaml from config.yaml.example. Fill in API keys before generating videos."
   fi
 
   if ensure_uv; then
@@ -108,7 +108,7 @@ AIGC-Director installation complete.
 
 Next steps:
   1. Edit backend API keys:
-     $BACKEND_DIR/.env
+     $BACKEND_DIR/config.yaml
 
   2. Start backend:
      cd "$BACKEND_DIR"

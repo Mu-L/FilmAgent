@@ -255,7 +255,7 @@ class VideoDirectorAgent(AgentInterface):
                 segments.extend(ep.get("segments", []))
             return self._build_payload(sid, segments)
 
-        video_model = input_data.get("video_model", "") or settings.VIDEO_MODEL
+        video_model = self._require_input(input_data, "video_model")
         enable_concurrency = input_data.get("enable_concurrency", True)
         from models.config_model import get_max_concurrency
         concurrency = get_max_concurrency(video_model, enable_concurrency)

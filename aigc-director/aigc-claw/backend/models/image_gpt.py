@@ -5,6 +5,7 @@ import base64
 import httpx
 import logging
 from openai import OpenAI
+from config import Config
 try:
     from models.image_processor import ImageProcessor
 except ImportError:
@@ -23,23 +24,26 @@ class ImageGPT:
     def __init__(self,
                  api_key: str = None,
                  base_url: str = None,
-                 local_proxy: str = None,
+                 proxy: str = None,
                  timeout: float = 300.0):
         """
         OpenAI 图片生成客户端
         :param api_key: API Key
-        :param base_url: 自定义 Base URL（如果传入，则不使用本地代理）
+        :param base_url: 自定义 Base URL
+        :param proxy: 当前 provider 显式启用时使用的代理
         :param timeout: 超时时间
         """
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.api_key = api_key or Config.OPENAI_API_KEY
         self.timeout = timeout
         
         kwargs = {"api_key": self.api_key, "timeout": self.timeout}
         
         self.base_url = base_url
-        if not self.base_url and local_proxy:
+        if proxy is None:
+            proxy = Config.provider_proxy("openai")
+        if proxy:
             kwargs["http_client"] = httpx.Client(
-                proxy=local_proxy,
+                proxy=proxy,
                 timeout=self.timeout,
             )
         if self.base_url:
@@ -124,7 +128,7 @@ class ImageGPT:
                         os.makedirs(save_dir, exist_ok=True)
                         file_name = f"gpt_{int(time.time())}_{uuid.uuid4().hex[:6]}.png"
                         file_path = os.path.join(save_dir, file_name)
-                        if self.image_processor.download_image(url, file_path):
+                        if self.image_processor.download_image(url, file_path, proxies=Config.requests_proxies("openai")):
                             return file_path
                         return url
                 
@@ -169,7 +173,7 @@ if __name__ == "__main__":
     print("\n=== GPT 文生图可用性测试 ===")
     img_prompt = "A cute orange cat lying on a sunny windowsill, watercolor style"
     img_path = ""
-    client = ImageGPT(api_key=api_key, base_url=Config.OPENAI_BASE_URL, local_proxy=Config.LOCAL_PROXY)
+    client = ImageGPT(api_key=api_key, base_url=Config.OPENAI_BASE_URL, proxy=Config.provider_proxy("openai"))
     for model in MODELS:
         print(f"\nTesting model: {model}")
         print(f"Prompt: {img_prompt}")

@@ -118,7 +118,7 @@ class ScriptWriterAgent(AgentInterface):
         async def run_smart_continue():
             import copy
             sid = input_data.get("session_id", "")
-            llm_model = input_data.get("llm_model", "qwen3.5-plus")
+            llm_model = self._require_input(input_data, "llm_model")
             web_search = input_data.get("web_search", False)
             episodes_to_add = intervention.get("episodes_to_add", 1)
             sequel_idea = intervention.get("sequel_idea", "").strip()
@@ -244,9 +244,17 @@ class ScriptWriterAgent(AgentInterface):
             idea = input_data.get("idea", "")
             sid = input_data.get("session_id", "")
             style = input_data.get("style", "anime")
-            llm_model = input_data.get("llm_model", "qwen3.5-plus")
+            llm_model = self._require_input(input_data, "llm_model")
             web_search = input_data.get("web_search", False)
-            episodes = input_data.get("episodes", 4)
+            episodes = input_data.get("episodes")
+            if episodes is None:
+                logger.warning("[ScriptWriter] episodes missing from input_data; falling back to 4. session=%s", sid)
+                episodes = 4
+            try:
+                episodes = max(1, int(episodes))
+            except (TypeError, ValueError):
+                logger.warning("[ScriptWriter] invalid episodes=%r; falling back to 4. session=%s", episodes, sid)
+                episodes = 4
             is_zh = any('\u4e00' <= c <= '\u9fff' for c in idea)
 
             from config import settings as app_settings

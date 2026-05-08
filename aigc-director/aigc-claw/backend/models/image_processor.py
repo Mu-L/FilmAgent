@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from PIL import Image
 import logging
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +21,14 @@ class ImageProcessor:
     
     def __init__(self,
                  image_path='',
-                 api_key: str = "sk-bcab316d69a7414faa9dc29737019333",
+                 api_key: str = "",
                  model_name: str = "wan2.6-i2v-flash"):
         """
         初始化图片处理器
         
         Args:
             image_path: 图片文件路径（可选，用于处理已有图片）
-            api_key: DashScope API Key（用于上传，可从环境变量 DASHSCOPE_API_KEY 读取）
+            api_key: DashScope API Key（用于上传，可从 config.yaml 读取）
             model_name: 模型名称，默认使用 wan2.6-i2v-flash
         """
         # 图片处理部分
@@ -44,7 +45,7 @@ class ImageProcessor:
             self.height = None
         
         # 上传功能部分
-        self.api_key = api_key or os.getenv("DASHSCOPE_API_KEY")
+        self.api_key = api_key or Config.DASHSCOPE_API_KEY
         self.model_name = model_name
 
     @staticmethod
@@ -132,7 +133,7 @@ class ImageProcessor:
         stitched_image.save(output_path)
         return output_path
     
-    def download_image(self, image_url, save_path, max_retries=3):
+    def download_image(self, image_url, save_path, max_retries=3, proxies=None):
         """
         下载图片，带有重试机制和SSL错误处理
         
@@ -155,7 +156,8 @@ class ImageProcessor:
                     verify=True,
                     headers={
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    }
+                    },
+                    proxies=proxies,
                 )
                 
                 if response.status_code == 200:
@@ -184,7 +186,8 @@ class ImageProcessor:
                             verify=False,
                             headers={
                                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                            }
+                            },
+                            proxies=proxies,
                         )
                         if response.status_code == 200:
                             with open(save_path, 'wb') as file:
@@ -276,7 +279,12 @@ class ImageProcessor:
             "model": self.model_name
         }
         
-        response = requests.get(self.UPLOAD_API_URL, headers=headers, params=params)
+        response = requests.get(
+            self.UPLOAD_API_URL,
+            headers=headers,
+            params=params,
+            proxies=Config.requests_proxies("dashscope"),
+        )
         if response.status_code != 200:
             raise Exception(f"Failed to get upload policy: {response.text}")
         
@@ -314,7 +322,11 @@ class ImageProcessor:
                 'file': (safe_file_name, file)
             }
             
-            response = requests.post(policy_data['upload_host'], files=files)
+            response = requests.post(
+                policy_data['upload_host'],
+                files=files,
+                proxies=Config.requests_proxies("dashscope"),
+            )
             if response.status_code != 200:
                 raise Exception(f"Failed to upload file: {response.text}")
         

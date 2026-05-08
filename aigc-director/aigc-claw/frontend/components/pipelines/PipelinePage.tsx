@@ -493,7 +493,7 @@ function PipelineHistory({
   };
 
   return (
-    <section className="w-full max-w-6xl px-6 pb-12">
+    <section className="w-full max-w-6xl mx-auto px-6 pb-12">
       <div className="flex items-center gap-2 mb-4">
         <Clock className="w-4 h-4 text-gray-400" />
         <h3 className="text-sm font-medium text-gray-600">历史记录</h3>

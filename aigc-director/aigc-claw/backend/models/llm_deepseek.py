@@ -1,7 +1,7 @@
-import os
 import time
 import logging
 from openai import OpenAI
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -14,16 +14,18 @@ class DeepSeek:
     deepseek-v4-pro: DeepSeek-V4 Pro
     """
     def __init__(self, base_url="", api_key=""):
-        self.base_url = base_url or os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com/v1"
-        self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
+        import httpx
+        self.base_url = base_url or Config.DEEPSEEK_BASE_URL or "https://api.deepseek.com/v1"
+        self.api_key = api_key or Config.DEEPSEEK_API_KEY
         
         if not self.api_key:
             logger.warning("DEEPSEEK_API_KEY is not set")
 
-        self.client = OpenAI(
-            api_key=self.api_key, 
-            base_url=self.base_url
-        )
+        kwargs = {"api_key": self.api_key, "base_url": self.base_url}
+        proxy = Config.provider_proxy("deepseek")
+        if proxy:
+            kwargs["http_client"] = httpx.Client(proxy=proxy)
+        self.client = OpenAI(**kwargs)
         self.max_attempts = 3
         self.max_tokens = 8000
 
@@ -76,8 +78,8 @@ if __name__ == "__main__":
     MODELS = ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-flash", "deepseek-v4-pro"]
 
     print("=== DeepSeek 可用性测试 ===")
-    api_key = os.getenv("DEEPSEEK_API_KEY")
-    base_url = os.getenv("DEEPSEEK_BASE_URL", "")
+    api_key = Config.DEEPSEEK_API_KEY
+    base_url = Config.DEEPSEEK_BASE_URL
     if not api_key:
         print("✗ DEEPSEEK_API_KEY 未设置，跳过")
         sys.exit(1)

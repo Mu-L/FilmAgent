@@ -4,10 +4,10 @@ Qwen LLM API 客户端（DashScope Generation API）
 支持 qwen3.5-plus, qwen3.5-max 等模型
 """
 
-import os
 import time
 import logging
 from typing import Optional
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +29,8 @@ class QwenLLM:
         :param api_key: DashScope API Key
         :param base_url: DashScope API Base URL (可选)
         """
-        self.api_key = api_key or os.getenv("DASHSCOPE_API_KEY")
-        self.base_url = base_url or os.getenv("DASHSCOPE_BASE_URL")
+        self.api_key = api_key or Config.DASHSCOPE_API_KEY
+        self.base_url = base_url or Config.DASHSCOPE_BASE_URL
 
         if not self.api_key:
             logger.warning("DASHSCOPE_API_KEY is not set")
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     MODELS = ["qwen3.6-max-preview", "qwen3-max", "deepseek-v3.2"]
 
     print("=== DashScope LLM 可用性测试 ===")
-    api_key = os.getenv("DASHSCOPE_API_KEY", "")
+    api_key = Config.DASHSCOPE_API_KEY
     if not api_key:
         print("✗ DASHSCOPE_API_KEY 未设置，跳过")
         sys.exit(1)

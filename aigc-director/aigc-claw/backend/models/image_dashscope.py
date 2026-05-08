@@ -6,6 +6,7 @@ import uuid
 import dashscope
 from dashscope import MultiModalConversation
 from dashscope.aigc.image_generation import ImageGeneration
+from config import Config
 try:
     from models.image_processor import ImageProcessor
 except ImportError:
@@ -13,9 +14,9 @@ except ImportError:
 
 class DashScopeClient:
     def __init__(self, api_key=None, base_url=None):
-        self.api_key = api_key or os.getenv("DASHSCOPE_API_KEY")
-        # 默认使用中国（北京）地域 API，如果环境变量或参数未设置则使用默认地址
-        self.base_url = base_url or os.getenv("DASHSCOPE_BASE_URL")
+        self.api_key = api_key or Config.DASHSCOPE_API_KEY
+        # 默认使用中国（北京）地域 API，如果参数或 config.yaml 未设置则使用默认地址
+        self.base_url = base_url or Config.DASHSCOPE_BASE_URL
         dashscope.api_key = self.api_key
         dashscope.base_http_api_url = self.base_url
         self.image_processor = ImageProcessor()
@@ -53,7 +54,7 @@ class DashScopeClient:
                     for i, url in enumerate(results):
                         file_name = f"ds_{session_id if session_id else 'nosess'}_{int(time.time())}_{i}_{uuid.uuid4().hex[:6]}.png"
                         file_path = os.path.join(save_dir, file_name)
-                        if self.image_processor.download_image(url, file_path):
+                        if self.image_processor.download_image(url, file_path, proxies=Config.requests_proxies("dashscope")):
                             local_files.append(file_path)
                     return local_files
                 
@@ -121,7 +122,7 @@ class DashScopeClient:
                     for i, url in enumerate(results):
                         file_name = f"ds_{session_id if session_id else 'nosess'}_{int(time.time())}_{i}_{uuid.uuid4().hex[:6]}.png"
                         file_path = os.path.join(save_dir, file_name)
-                        if self.image_processor.download_image(url, file_path):
+                        if self.image_processor.download_image(url, file_path, proxies=Config.requests_proxies("dashscope")):
                             local_files.append(file_path)
                     return local_files
 

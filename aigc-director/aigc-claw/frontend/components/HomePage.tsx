@@ -1,10 +1,10 @@
 ﻿'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Play, Settings2, Clock, ArrowRight, Zap, CheckCircle, Trash2, X, Lock, Globe, ListOrdered, Upload, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import { PROMPT_EXAMPLES } from '@/config/examples';
-import { LLM_MODELS, T2I_MODELS, I2I_MODELS, VIDEO_MODELS, VLM_MODELS, STYLES, VIDEO_RATIOS, LLM_PROVIDERS, T2I_PROVIDERS, I2I_PROVIDERS, VIDEO_PROVIDERS, VLM_PROVIDERS, ProviderGroup } from '@/config/models';
+import { STYLES, VIDEO_RATIOS, LLM_PROVIDERS, T2I_PROVIDERS, I2I_PROVIDERS, VIDEO_PROVIDERS, VLM_PROVIDERS } from '@/config/models';
 import { STAGES } from './TopBar';
 
 export interface ProjectParams {
@@ -57,12 +57,14 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
   const [idea, setIdea] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState('realistic');
-  const [selectedLLM, setSelectedLLM] = useState(LLM_MODELS.find(m => m.default)?.id || LLM_MODELS[0].id);
-  const [selectedVLM, setSelectedVLM] = useState(VLM_MODELS.find(m => m.default)?.id || VLM_MODELS[0].id);
-  const [selectedT2I, setSelectedT2I] = useState(T2I_MODELS.find(m => m.default)?.id || T2I_MODELS[0].id);
-  const [selectedI2I, setSelectedI2I] = useState(I2I_MODELS.find(m => m.default)?.id || I2I_MODELS[0].id);
-  const [selectedVideo, setSelectedVideo] = useState(VIDEO_MODELS.find(m => m.default)?.id || VIDEO_MODELS[0].id);
-  const [selectedRatio, setSelectedRatio] = useState('16:9');
+  const [selectedLLM, setSelectedLLM] = useState('');
+  const [selectedVLM, setSelectedVLM] = useState('');
+  const [selectedT2I, setSelectedT2I] = useState('');
+  const [selectedI2I, setSelectedI2I] = useState('');
+  const [selectedVideo, setSelectedVideo] = useState('');
+  const [selectedRatio, setSelectedRatio] = useState('');
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configError, setConfigError] = useState('');
   const [enableConcurrency, setEnableConcurrency] = useState(true);
   const [webSearch, setWebSearch] = useState(false);
   const [episodes, setEpisodes] = useState(4);
@@ -78,6 +80,38 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const modelConfigReady = Boolean(selectedLLM && selectedVLM && selectedT2I && selectedI2I && selectedVideo && selectedRatio);
+  const canStart = Boolean((idea.trim() || uploadedFile) && modelConfigReady && !configLoading);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadDefaultConfig = async () => {
+      setConfigLoading(true);
+      setConfigError('');
+      try {
+        const resp = await fetch('/api/config');
+        if (!resp.ok) throw new Error('读取默认模型配置失败');
+        const data = await resp.json();
+        const models = data.config?.models || {};
+        if (!models.llm || !models.vlm || !models.image_t2i || !models.image_it2i || !models.video) {
+          throw new Error('backend/config.yaml 缺少主流程默认模型');
+        }
+        if (cancelled) return;
+        setSelectedLLM(models.llm);
+        setSelectedVLM(models.vlm);
+        setSelectedT2I(models.image_t2i);
+        setSelectedI2I(models.image_it2i);
+        setSelectedVideo(models.video);
+        setSelectedRatio(models.video_ratio || '16:9');
+      } catch (e: any) {
+        if (!cancelled) setConfigError(e.message || '读取默认模型配置失败');
+      } finally {
+        if (!cancelled) setConfigLoading(false);
+      }
+    };
+    loadDefaultConfig();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -94,7 +128,7 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
   };
 
   const handleStart = (auto?: boolean) => {
-    if (!idea.trim() && !uploadedFile) return;
+    if (!canStart) return;
     onStartProject({
       idea,
       file_path: uploadedFile?.path, // 如果上传了文件，传给后端
@@ -326,10 +360,10 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
               </button>
               <button
                 onClick={() => handleStart(false)}
-                disabled={!idea.trim() && !uploadedFile}
+                disabled={!canStart}
                 className={clsx(
                   'flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-medium transition-colors',
-                  (idea.trim() || uploadedFile)
+                  canStart
                     ? 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm'
                     : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 )}
@@ -339,10 +373,10 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
               </button>
               <button
                 onClick={() => handleStart(true)}
-                disabled={!idea.trim() && !uploadedFile}
+                disabled={!canStart}
                 className={clsx(
                   'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors',
-                  (idea.trim() || uploadedFile)
+                  canStart
                     ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm'
                     : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 )}
@@ -353,6 +387,11 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
               </button>
             </div>
           </div>
+          {(configLoading || configError) && (
+            <div className={clsx('mt-3 text-xs', configError ? 'text-red-500' : 'text-gray-400')}>
+              {configError || '正在读取 backend/config.yaml 中的默认模型...'}
+            </div>
+          )}
 
           {/* 模型设置折叠面板 */}
           {showSettings && (

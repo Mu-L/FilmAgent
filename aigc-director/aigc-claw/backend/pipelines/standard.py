@@ -3,7 +3,6 @@ import logging
 import os
 import re
 
-from config import settings
 from models.llm_client import LLM
 from prompts.loader import format_prompt, load_prompt
 
@@ -27,6 +26,13 @@ DEFAULT_STYLE_CONTROL = (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def required_param(params: dict, key: str) -> str:
+    value = params.get(key)
+    if not value:
+        raise ValueError(f"standard pipeline requires {key}")
+    return str(value)
 
 
 def split_by_periods(text: str) -> list[str]:
@@ -137,7 +143,7 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
     mode = params.get("mode") or "copy"
     source_text = text.strip()
     llm = None
-    llm_model = params.get("llm_model") or settings.LLM_MODEL
+    llm_model = required_param(params, "llm_model")
     if mode == "inspiration":
         segment_count = clamp_segment_count(params.get("segment_count"))
         update_task(task_id, progress=6, message="Writing narration from inspiration")
@@ -169,12 +175,16 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
 
     style_control = (params.get("style_control") or params.get("negative_prompt") or DEFAULT_STYLE_CONTROL).strip()
     video_ratio = params.get("video_ratio") or "9:16"
-    image_model = params.get("image_model") or params.get("image_workflow") or settings.IMAGE_T2I_MODEL
+    image_model = params.get("image_model") or params.get("image_workflow")
+    if not image_model:
+        raise ValueError("standard pipeline requires image_model")
     image_resolution = params.get("image_resolution") or "1080P"
     enable_subtitles = bool(params.get("enable_subtitles", False))
     video_mode = params.get("video_mode") or "image_concat"
     dynamic_video = video_mode == "dynamic_video" or bool(params.get("generate_videos", False))
-    video_model = params.get("video_model") or settings.VIDEO_MODEL
+    video_model = params.get("video_model")
+    if dynamic_video and not video_model:
+        raise ValueError("standard pipeline dynamic_video mode requires video_model")
     video_duration = clamp_segment_count(params.get("video_duration") or params.get("duration") or 5, default=5)
 
     update_task(task_id, progress=9, message="Generating image prompts")

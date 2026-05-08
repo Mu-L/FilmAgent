@@ -6,8 +6,10 @@ Seedream 图像生成 API 客户端
 import os
 import time
 import logging
+import httpx
 from typing import Optional, List, Dict
 from openai import OpenAI
+from config import Config
 
 # 模型名称映射表（旧名称 -> 新名称）
 MODEL_NAME_MAP: Dict[str, str] = {
@@ -53,8 +55,8 @@ class SeedreamClient:
             base_url: ARK API 基础 URL
             timeout: HTTP请求超时时间（秒）
         """
-        self.api_key = api_key or os.getenv("ARK_API_KEY")
-        self.base_url = base_url or "https://ark.cn-beijing.volces.com/api/v3"
+        self.api_key = api_key or Config.ARK_API_KEY
+        self.base_url = base_url or Config.ARK_BASE_URL or "https://ark.cn-beijing.volces.com/api/v3"
         self.timeout = timeout
 
         if not self.api_key:
@@ -62,11 +64,15 @@ class SeedreamClient:
                 "SeedreamClient missing api_key. Set ARK_API_KEY."
             )
 
-        self.client = OpenAI(
-            base_url=self.base_url,
-            api_key=self.api_key,
-            timeout=timeout,
-        )
+        kwargs = {
+            "base_url": self.base_url,
+            "api_key": self.api_key,
+            "timeout": timeout,
+        }
+        proxy = Config.provider_proxy("ark")
+        if proxy:
+            kwargs["http_client"] = httpx.Client(proxy=proxy, timeout=timeout)
+        self.client = OpenAI(**kwargs)
 
     def generate_image(
         self,
@@ -226,7 +232,7 @@ class SeedreamClient:
         file_path = os.path.join(result_dir, file_name)
 
         try:
-            response = requests.get(url, timeout=self.timeout)
+            response = requests.get(url, timeout=self.timeout, proxies=Config.requests_proxies("ark"))
             response.raise_for_status()
             with open(file_path, "wb") as f:
                 f.write(response.content)
@@ -239,11 +245,11 @@ class SeedreamClient:
 if __name__ == "__main__":
     import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from config import Config  # 加载 .env
+    from config import Config
 
     print("=== Seedream 可用性测试 ===")
-    api_key = os.getenv("ARK_API_KEY", "")
-    base_url = os.getenv("ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
+    api_key = Config.ARK_API_KEY
+    base_url = Config.ARK_BASE_URL
     if not api_key:
         print("✗ ARK_API_KEY 未设置，跳过")
         sys.exit(1)

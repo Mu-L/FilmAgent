@@ -25,7 +25,7 @@ class ImageClient:
                  dashscope_base_url: Optional[str] = None,
                  gpt_api_key: Optional[str] = None,
                  gpt_base_url: Optional[str] = None,
-                 local_proxy: Optional[str] = None,
+                 proxy: Optional[str] = None,
                  ark_api_key: Optional[str] = None,
                  ark_base_url: Optional[str] = None):
         """
@@ -48,7 +48,7 @@ class ImageClient:
         self.gpt_client = ImageGPT(
             api_key=gpt_api_key,
             base_url=gpt_base_url,
-            local_proxy=local_proxy
+            proxy=Config.provider_proxy("openai") if proxy is None else proxy
         )
 
         # Initialize Image Processor for downloads

@@ -18,6 +18,7 @@ except ImportError:
     VideoSynthesis = None
 import requests
 from requests import exceptions as requests_exceptions
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +34,8 @@ class DashscopeVideoClient:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
     ) -> None:
-        self.api_key = api_key or os.getenv("DASHSCOPE_API_KEY")
-        self.base_url = base_url or os.getenv("DASHSCOPE_BASE_URL")
+        self.api_key = api_key or Config.DASHSCOPE_API_KEY
+        self.base_url = base_url or Config.DASHSCOPE_BASE_URL
 
         if dashscope and self.api_key:
             dashscope.api_key = self.api_key
@@ -350,7 +351,12 @@ class DashscopeVideoClient:
         # 下载视频
         resp = self._with_network_retry(
             "download video",
-            lambda: requests.get(video_url, stream=True, timeout=120),
+            lambda: requests.get(
+                video_url,
+                stream=True,
+                timeout=120,
+                proxies=Config.requests_proxies("dashscope"),
+            ),
             max_attempts=5,
             base_delay=3.0,
         )
@@ -527,7 +533,7 @@ if __name__ == "__main__":
     ak = Config.DASHSCOPE_API_KEY
     base_url = Config.DASHSCOPE_BASE_URL
     if not ak:
-        print("✗ DASHSCOPE_API_KEY 未设置，请检查 .env 配置")
+        print("✗ DASHSCOPE_API_KEY 未设置，请检查 config.yaml 配置")
         sys.exit(1)
 
     if not os.path.exists(IMAGE_PATH):

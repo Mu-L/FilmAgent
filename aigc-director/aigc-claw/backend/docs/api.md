@@ -41,11 +41,11 @@ MovieAssistant 是一个 AI 视频生成系统，提供 REST API 供外部调用
   "idea": "故事线描述",
   "style": "anime",
   "episodes": 4,
-  "llm_model": "qwen3.5-plus",
-  "vlm_model": "qwen-vl-plus",
-  "image_t2i_model": "doubao-seedream-5-0",
-  "image_it2i_model": "doubao-seedream-5-0",
-  "video_model": "wan2.6-i2v-flash",
+  "llm_model": "deepseek-v3.2",
+  "vlm_model": "qwen3.5-plus",
+  "image_t2i_model": "doubao-seedream-5-0-260128",
+  "image_it2i_model": "doubao-seedream-5-0-260128",
+  "video_model": "wan2.7-i2v",
   "enable_concurrency": true
 }
 ```
@@ -56,11 +56,11 @@ MovieAssistant 是一个 AI 视频生成系统，提供 REST API 供外部调用
 | idea | string | 是 | 故事线描述 | - |
 | style | string | 否 | 视频风格 | anime |
 | episodes | int | 否 | 生成的剧集数量 | 4 |
-| llm_model | string | 否 | LLM 模型 | qwen3.5-plus |
-| vlm_model | string | 否 | VLM 评估模型 | qwen-vl-plus |
-| image_t2i_model | string | 否 | 文生图模型 | doubao-seedream-5-0 |
-| image_it2i_model | string | 否 | 图生图模型 | doubao-seedream-5-0 |
-| video_model | string | 否 | 视频模型 | wan2.6-i2v-flash |
+| llm_model | string | 是 | LLM 模型；前端从 `backend/config.yaml` 读取默认值并传递 | - |
+| vlm_model | string | 是 | VLM 评估模型；前端从 `backend/config.yaml` 读取默认值并传递 | - |
+| image_t2i_model | string | 是 | 文生图模型；前端从 `backend/config.yaml` 读取默认值并传递 | - |
+| image_it2i_model | string | 是 | 图生图模型；前端从 `backend/config.yaml` 读取默认值并传递 | - |
+| video_model | string | 是 | 视频模型；前端从 `backend/config.yaml` 读取默认值并传递 | - |
 | enable_concurrency | bool | 否 | 开启并发生成（可同时生成多张图片/视频） | true |
 
 **响应示例**:
@@ -71,8 +71,8 @@ MovieAssistant 是一个 AI 视频生成系统，提供 REST API 供外部调用
   "params": {
     "idea": "故事线描述",
     "style": "anime",
-    "llm_model": "gemini-3-flash-preview",
-    "vlm_model": "qwen-vl-plus",
+    "llm_model": "deepseek-v3.2",
+    "vlm_model": "qwen3.5-plus",
     "episodes": 4
   }
 }
@@ -182,11 +182,22 @@ MovieAssistant 是一个 AI 视频生成系统，提供 REST API 供外部调用
 
 请求体格式**因阶段而异**：
 
-#### storyboard — 修改分镜（时长/剧情/视觉提示词）
+#### storyboard — 修改分集/片段/镜头
 ```json
 {
-  "shots": [
-    {"shot_id": "shot_001_01", "duration": 5, "plot": "新剧情描述", "visual_prompt": "新视觉提示词"}
+  "episodes": [
+    {
+      "episode_number": 1,
+      "segments": [
+        {
+          "segment_id": "seg_01_01",
+          "total_duration": 10,
+          "visual_prompt": "新视觉提示词",
+          "video_prompt": "新视频提示词",
+          "shots": []
+        }
+      ]
+    }
   ]
 }
 ```
@@ -194,8 +205,8 @@ MovieAssistant 是一个 AI 视频生成系统，提供 REST API 供外部调用
 #### reference_generation — 修改视觉提示词
 ```json
 {
-  "shots": [
-    {"shot_id": "shot_001_01", "visual_prompt": "新提示词"}
+  "segments": [
+    {"segment_id": "seg_01_01", "visual_prompt": "新提示词"}
   ]
 }
 ```
@@ -203,21 +214,21 @@ MovieAssistant 是一个 AI 视频生成系统，提供 REST API 供外部调用
 #### reference_generation — 选择参考图版本
 ```json
 {
-  "shot_001_01": "code/result/image/xxx/shot_001_01_v2.jpg"
+  "seg_01_01": "code/result/image/xxx/seg_01_01_v2.jpg"
 }
 ```
 
 #### video_generation — 修改片段描述/时长
 ```json
 {
-  "shot_001_01": {"description": "新描述", "duration": 5}
+  "seg_01_01": {"description": "新描述", "duration": 5}
 }
 ```
 
 #### video_generation — 选择视频版本
 ```json
 {
-  "shot_001_01": "code/result/video/xxx/shot_001_01_v2.mp4"
+  "seg_01_01": "code/result/video/xxx/seg_01_01_v2.mp4"
 }
 ```
 

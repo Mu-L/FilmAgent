@@ -20,14 +20,9 @@ npm install
 > npm install
 > ```
 
-## 步骤3：配置环境变量（可选）
+## 步骤3：确认后端地址
 
-```bash
-# 复制配置示例文件
-cp .env.local.example .env.local
-```
-
-通常无需修改默认配置。
+前端默认通过 Next.js rewrite 访问本机后端 `http://localhost:8000`，通常无需单独配置。
 
 ## 步骤4：Build 并启动
 

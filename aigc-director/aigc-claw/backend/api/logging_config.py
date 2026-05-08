@@ -1,8 +1,8 @@
 import logging
-import os
 import queue
 import sys
 from logging.handlers import QueueHandler, QueueListener
+from config import Config
 
 _listener = None
 
@@ -29,7 +29,7 @@ def setup_concurrent_logging():
     if _listener is not None:
         return _listener
 
-    level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+    level_name = "DEBUG" if Config.DEBUG else "INFO"
     level = getattr(logging, level_name, logging.INFO)
 
     log_queue = queue.Queue(-1)
