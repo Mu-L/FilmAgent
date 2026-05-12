@@ -76,11 +76,11 @@ Pipeline 任务元数据保存在 `aigc-director/aigc-claw/backend/code/data/tas
 <div align="center">
 <table align="center" border="0" cellspacing="0" cellpadding="0" style="border:none; border-collapse:collapse; margin:0 auto;">
   <tr>
-    <td align="center" valign="top" width="50%" style="border:none;">
+    <td align="center" valign="top" width="30%" style="border:none;">
       <video src="https://github.com/user-attachments/assets/627e961e-bd0e-449c-987e-9bae34b669c7" controls width="100%" preload="none"></video>
       <br><b>▶️ 破壁之锤</b>
     </td>
-    <td align="center" valign="top" width="50%" style="border:none;">
+    <td align="center" valign="top" width="30%" style="border:none;">
       <a href="https://github.com/user-attachments/assets/ebb47cb8-fa9f-4557-b70c-ff6368ee0b6c" target="_blank">
         <img src="https://github.com/user-attachments/assets/40e3efa4-9923-48ce-bde8-3c7d0f1b6a16" alt="deepseek-v4 封面" width="100%" />
       </a>
@@ -173,7 +173,7 @@ Pipeline 任务元数据保存在 `aigc-director/aigc-claw/backend/code/data/tas
   <tr>
     <td align="center" valign="top">
       <a href="https://github.com/user-attachments/assets/affed408-4df7-4ce7-9681-8f4ed45a6fcf">
-        <img src="https://github.com/user-attachments/assets/fcfd191c-61f9-484f-a036-ce717620c827" width="100%" alt="点击播放 第 3 集">
+        <img src="https://github.com/user-attachments/assets/81acd075-e4f1-4621-b2dc-b2d87ed83b81" width="100%" alt="点击播放 第 3 集">
       </a>
       <br><b>▶️ 第 3 集</b><br>临终托付
     </td>
