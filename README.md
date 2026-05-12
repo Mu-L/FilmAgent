@@ -110,7 +110,7 @@ Pipeline 任务元数据保存在 `aigc-director/aigc-claw/backend/code/data/tas
     </td>
     <td align="center" valign="top" width="25%">
       <a href="https://github.com/user-attachments/assets/359809cf-678b-429c-bafa-55ff50fd3277">
-        <img src="https://github.com/user-attachments/assets/d4ee54c0-5b90-4a77-8b35-782439e5dc51" width="100%" alt="点击播放 第 3 集">
+        <img src="https://github.com/user-attachments/assets/fcfd191c-61f9-484f-a036-ce717620c827" width="100%" alt="点击播放 第 3 集">
       </a>
       <br><b>▶️ 第 3 集</b><br>AI获投 旧主危机
     </td>
