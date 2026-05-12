@@ -74,20 +74,18 @@ Pipeline 任务元数据保存在 `aigc-director/aigc-claw/backend/code/data/tas
 使用 deepseek-v4 + gpt-image-2 + happy-horse-1.0 生成
 
 <div align="center">
-<table>
+<table align="center" border="0" cellspacing="0" cellpadding="0" style="border:none; border-collapse:collapse; margin:0 auto;">
   <tr>
-    <td align="center" valign="top" width="25%">
+    <td align="center" valign="top" width="50%" style="border:none;">
       <video src="https://github.com/user-attachments/assets/627e961e-bd0e-449c-987e-9bae34b669c7" controls width="100%" preload="none"></video>
       <br><b>▶️ 破壁之锤</b>
     </td>
-    <td align="center" valign="top" width="25%">
+    <td align="center" valign="top" width="50%" style="border:none;">
       <a href="https://github.com/user-attachments/assets/ebb47cb8-fa9f-4557-b70c-ff6368ee0b6c" target="_blank">
         <img src="https://github.com/user-attachments/assets/40e3efa4-9923-48ce-bde8-3c7d0f1b6a16" alt="deepseek-v4 封面" width="100%" />
       </a>
       <br><b>▶️ 破壁之锤（原画质）</b>
     </td>
-    <td width="25%"></td>
-    <td width="25%"></td>
   </tr>
 </table>
 </div>
