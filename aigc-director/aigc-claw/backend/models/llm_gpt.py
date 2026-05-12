@@ -1,8 +1,8 @@
 
-import os
 import time
 import logging
 from openai import OpenAI
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -12,20 +12,19 @@ class GPT:
     OpenAI 文本生成客户端
     可选模型：gpt-4o, 
     """
-    def __init__(self, base_url="", api_key="", local_proxy=None, timeout=300):
+    def __init__(self, base_url="", api_key="", proxy=None, timeout=300):
         import httpx
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.api_key = api_key or Config.OPENAI_API_KEY
         self.timeout = timeout
         
         kwargs = {"api_key": self.api_key, "timeout": self.timeout}
-        
-        # 代理逻辑：
-        # 1. 如果传入了 base_url，则不使用本地代理
-        # 2. 如果没传入 base_url，则使用默认值并尝试开启本地代理
+
         self.base_url = base_url
-        if not self.base_url and local_proxy:
+        if proxy is None:
+            proxy = Config.provider_proxy("openai")
+        if proxy:
             kwargs["http_client"] = httpx.Client(
-                proxy=local_proxy,
+                proxy=proxy,
                 timeout=self.timeout,
             )
         if self.base_url:

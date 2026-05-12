@@ -5,6 +5,13 @@ from .storage import append_artifact, task_output_dir, update_task
 from .utils import artifact, copy_input_file, run_blocking, write_json
 
 
+def required_param(params: dict, key: str) -> str:
+    value = params.get(key)
+    if not value:
+        raise ValueError(f"action_transfer pipeline requires {key}")
+    return str(value)
+
+
 async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
     output_dir = task_output_dir(task_id)
     os.makedirs(output_dir, exist_ok=True)
@@ -22,12 +29,13 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
     image_path = copy_input_file(image_path, output_dir, "input_image")
     video_path = copy_input_file(video_path, output_dir, "input_video")
     final_video_path = os.path.join(output_dir, "final.mp4")
+    video_model = required_param(params, "video_model")
 
     update_task(task_id, progress=20, message="Calling action-transfer video API")
     await run_blocking(
         generate_video_api,
         prompt=prompt,
-        model=params.get("video_model") or "wan2.7-videoedit",
+        model=video_model,
         output_path=final_video_path,
         image_path=None,
         duration=int(params.get("duration") or 5),
@@ -44,7 +52,7 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         "prompt": prompt,
         "image_path": image_path,
         "video_path": video_path,
-        "video_model": params.get("video_model") or "wan2.7-videoedit",
+        "video_model": video_model,
     })
     artifacts = [
         artifact(request_path, "text", "request"),

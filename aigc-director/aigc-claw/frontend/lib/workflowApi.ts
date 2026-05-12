@@ -208,6 +208,10 @@ export async function startProject(params: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
   });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: '项目创建失败' }));
+    throw new Error(err.detail || '项目创建失败');
+  }
   return resp.json();
 }
 

@@ -14,8 +14,10 @@ import os
 import time
 import base64
 import logging
+import httpx
 from openai import OpenAI
 from typing import Dict, List, Optional
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +32,16 @@ class GeminiVLClient:
         :param api_key: Gemini API Key
         :param base_url: 自定义 Base URL（可选，用于代理）
         """
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self.api_key = api_key or Config.GEMINI_API_KEY
         default_url = "https://generativelanguage.googleapis.com/v1beta"
-        self.base_url = base_url or os.getenv("GOOGLE_GEMINI_BASE_URL", default_url)
+        self.base_url = base_url or Config.GOOGLE_GEMINI_BASE_URL or default_url
         if self.base_url and not self.base_url.endswith("/v1"):
             self.base_url = self.base_url.rstrip("/") + "/v1"
-        self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        kwargs = {"api_key": self.api_key, "base_url": self.base_url}
+        proxy = Config.provider_proxy("gemini")
+        if proxy:
+            kwargs["http_client"] = httpx.Client(proxy=proxy)
+        self.client = OpenAI(**kwargs)
         self.max_attempts = 10
         self.max_tokens = 8000
 

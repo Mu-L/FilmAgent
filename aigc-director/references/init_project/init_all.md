@@ -28,11 +28,11 @@ npm --version
 
 ## 一键初始化（推荐）
 
-在 `aigc-director/aigc-claw` 项目目录执行：
+从仓库根目录进入 `aigc-director/aigc-claw` 后执行：
 
 ```bash
 # macOS / Linux
-cd aigc-claw
+cd aigc-director/aigc-claw
 chmod +x install.sh
 ./install.sh
 ```
@@ -40,11 +40,11 @@ chmod +x install.sh
 Windows 执行：
 
 ```bat
-cd aigc-claw
+cd aigc-director\aigc-claw
 install.bat
 ```
 
-安装脚本会完成后端依赖、`.env` 初始化、前端依赖安装和前端 build。安装完成后，提醒用户编辑 `aigc-claw/backend/.env` 填入 API Key。
+安装脚本会完成后端依赖、`config.yaml` 初始化、前端依赖安装和前端 build。安装完成后，提醒用户编辑 `aigc-claw/backend/config.yaml` 填入 API Key，或启动前端后通过侧边栏底部「设置」页面配置。
 
 ## 手动初始化步骤
 
@@ -70,7 +70,7 @@ curl http://localhost:3000
 
 | 问题 | 解决方法 |
 |------|----------|
-| 后端启动失败 | 检查 Python 版本，确保 3.9+，检查 .env 配置 |
+| 后端启动失败 | 检查 Python 版本，确保 3.9+，检查 `config.yaml` 配置 |
 | 前端 build 失败 | 删除 node_modules 和 .next，重新 `npm install` |
 | 端口被占用 | `lsof -ti :8000 | xargs kill` 或 `lsof -ti :3000 | xargs kill` |
 | 依赖安装慢 | 使用国内镜像源 |

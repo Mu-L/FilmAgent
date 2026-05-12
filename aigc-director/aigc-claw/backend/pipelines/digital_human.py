@@ -2,7 +2,6 @@ import os
 import re
 import logging
 
-from config import settings
 from models.llm_client import LLM
 
 from .api_media import generate_image_api, generate_video_api
@@ -25,6 +24,13 @@ from .utils import (
 from models.config_model import video_capabilities
 
 logger = logging.getLogger(__name__)
+
+
+def required_param(params: dict, key: str) -> str:
+    value = params.get(key)
+    if not value:
+        raise ValueError(f"digital_human pipeline requires {key}")
+    return str(value)
 
 
 def split_by_periods(text: str) -> list[str]:
@@ -56,7 +62,7 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         goods_image = copy_input_file(goods_image, output_dir, "goods")
 
     llm = LLM()
-    llm_model = params.get("llm_model") or settings.LLM_MODEL
+    llm_model = required_param(params, "llm_model")
     if not goods_text.strip():
         update_task(task_id, progress=15, message="Generating digital-human script")
         logger.info("Generating digital-human script from title: %s", goods_title)
@@ -83,31 +89,30 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
     reference_images = [character_image]
     if mode == "digital" and goods_image:
         reference_images.append(goods_image)
-        image_model = params.get("image_model")
-        if image_model:
-            update_task(task_id, progress=30, message="Generating digital-human reference image")
-            logger.info("Generating digital-human reference image: model=%s refs=%d", image_model, len(reference_images))
-            image_prompt = (
-                f"Create a polished vertical digital-human product promotion image. "
-                f"Use reference image 1 as the presenter and reference image 2 as the product. "
-                f"Make the scene commercial, clean, and suitable for a spoken short video. "
-                f"Script: {goods_text}"
-            )
-            generated_image = await run_blocking(
-                generate_image_api,
-                prompt=image_prompt,
-                model=image_model,
-                output_dir=output_dir,
-                task_id=task_id,
-                image_paths=reference_images,
-                video_ratio=params.get("video_ratio") or "9:16",
-                resolution=params.get("image_resolution") or "1080P",
-            )
-            reference_images = [generated_image]
-            append_artifact(task_id, artifact(generated_image, "image", "generated_reference"))
+        image_model = required_param(params, "image_model")
+        update_task(task_id, progress=30, message="Generating digital-human reference image")
+        logger.info("Generating digital-human reference image: model=%s refs=%d", image_model, len(reference_images))
+        image_prompt = (
+            f"Create a polished vertical digital-human product promotion image. "
+            f"Use reference image 1 as the presenter and reference image 2 as the product. "
+            f"Make the scene commercial, clean, and suitable for a spoken short video. "
+            f"Script: {goods_text}"
+        )
+        generated_image = await run_blocking(
+            generate_image_api,
+            prompt=image_prompt,
+            model=image_model,
+            output_dir=output_dir,
+            task_id=task_id,
+            image_paths=reference_images,
+            video_ratio=params.get("video_ratio") or "9:16",
+            resolution=params.get("image_resolution") or "1080P",
+        )
+        reference_images = [generated_image]
+        append_artifact(task_id, artifact(generated_image, "image", "generated_reference"))
 
     update_task(task_id, progress=62, message="Preparing digital-human video segments")
-    video_model = params.get("video_model") or "wan2.7-r2v"
+    video_model = required_param(params, "video_model")
     provider, resolved_video_model = parse_api_workflow(video_model, "video")
     duration_contract = video_capabilities(provider, resolved_video_model).get("duration") or {}
     max_duration = int(duration_contract.get("max") or 10)

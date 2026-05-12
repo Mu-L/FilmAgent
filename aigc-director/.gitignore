@@ -12,3 +12,6 @@ __pycache__/
 *.pyc
 # 忽略zip文件
 *.zip
+
+# 本地后端配置密钥
+aigc-claw/backend/config.yaml

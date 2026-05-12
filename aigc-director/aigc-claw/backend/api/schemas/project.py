@@ -16,7 +16,7 @@ class ProjectStartRequest(BaseModel):
     video_model: Optional[str] = None
     enable_concurrency: Optional[bool] = True
     web_search: Optional[bool] = False
-    episodes: Optional[int] = 4
+    episodes: Optional[int] = None
 
 
 class InterventionRequest(BaseModel):

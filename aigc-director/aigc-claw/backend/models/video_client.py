@@ -53,8 +53,8 @@ class VideoClient:
 
         # Seedance 客户端
         self.seedance_client = SeedanceVideoClient(
-            api_key=ark_api_key or Config.ARK_API_KEY or os.getenv("ARK_API_KEY"),
-            base_url=ark_base_url or Config.ARK_BASE_URL or os.getenv("ARK_BASE_URL"),
+            api_key=ark_api_key or Config.ARK_API_KEY,
+            base_url=ark_base_url or Config.ARK_BASE_URL,
         )
 
     def generate_video(

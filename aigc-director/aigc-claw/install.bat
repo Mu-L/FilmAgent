@@ -32,9 +32,9 @@ if errorlevel 1 (
 )
 
 cd /d "%BACKEND_DIR%"
-if not exist ".env" if exist ".env.example" (
-  copy ".env.example" ".env" >nul
-  echo [install] Created backend .env from .env.example. Fill in API keys before generating videos.
+if not exist "config.yaml" if exist "config.yaml.example" (
+  copy "config.yaml.example" "config.yaml" >nul
+  echo [install] Created backend config.yaml from config.yaml.example. Fill in API keys before generating videos.
 )
 
 where uv >nul 2>nul
@@ -72,7 +72,7 @@ echo [install] AIGC-Director installation complete.
 echo.
 echo Next steps:
 echo   1. Edit backend API keys:
-echo      %BACKEND_DIR%\.env
+echo      %BACKEND_DIR%\config.yaml
 echo.
 echo   2. Start backend:
 echo      cd /d "%BACKEND_DIR%"

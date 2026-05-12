@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Clapperboard, Hexagon, Home, PanelLeftOpen, Repeat2, UserRound } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clapperboard, Hexagon, Home, PanelLeftOpen, Repeat2, Settings, UserRound } from 'lucide-react';
 import clsx from 'clsx';
 import { useState } from 'react';
 
@@ -13,6 +13,8 @@ const NAV_ITEMS = [
   { href: '/pipelines/action-transfer', label: '动作迁移', icon: Repeat2 },
   { href: '/pipelines/digital-human', label: '数字人口播', icon: UserRound },
 ];
+
+const SETTINGS_ITEM = { href: '/settings', label: '设置', icon: Settings };
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -33,7 +35,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <span className="text-sm font-semibold text-gray-800 truncate">AIGC-Claw</span>
             </div>
           </div>
-          <nav className="p-3 space-y-1">
+          <nav className="p-3 pb-20 space-y-1">
             {NAV_ITEMS.map(item => {
               const Icon = item.icon;
               const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
@@ -54,6 +56,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
+          <div className="absolute bottom-0 left-0 right-0 border-t border-gray-100 p-3">
+            {(() => {
+              const Icon = SETTINGS_ITEM.icon;
+              const active = pathname.startsWith(SETTINGS_ITEM.href);
+              return (
+                <Link
+                  href={SETTINGS_ITEM.href}
+                  className={clsx(
+                    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                    active
+                      ? 'bg-blue-50 text-blue-600'
+                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                  )}
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">{SETTINGS_ITEM.label}</span>
+                </Link>
+              );
+            })()}
+          </div>
         </div>
       </aside>
 

@@ -71,6 +71,12 @@ class AgentInterface(ABC):
         if self.cancellation_check and self.cancellation_check():
             raise RuntimeError(f"Agent [{self.name}] cancelled by user")
 
+    def _require_input(self, input_data: Dict, key: str) -> str:
+        value = input_data.get(key)
+        if not value:
+            raise ValueError(f"Missing required model configuration: {key}")
+        return str(value)
+
     def _cancellable_query(self, llm, prompt: str, image_urls=[], model="gemini-3-flash-preview", safe_content=True, task_id=None, web_search=False):
         """在 LLM 调用前后检查取消状态"""
         self._check_cancel()

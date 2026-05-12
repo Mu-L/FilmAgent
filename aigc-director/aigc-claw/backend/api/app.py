@@ -26,6 +26,7 @@ from api.routers import (
     stages_router,
     workflow_router,
     pipelines_router,
+    configuration_router,
 )
 
 
@@ -58,6 +59,7 @@ app.include_router(sessions_router)
 app.include_router(stages_router)
 app.include_router(sandbox_router)
 app.include_router(pipelines_router)
+app.include_router(configuration_router)
 logger.info("API routers registered")
 
 

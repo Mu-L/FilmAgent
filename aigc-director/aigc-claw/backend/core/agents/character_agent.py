@@ -379,8 +379,8 @@ class CharacterDesignerAgent(AgentInterface):
 
         sid = input_data["session_id"]
         style = input_data.get("style", "anime")
-        t2i_model = input_data.get("image_t2i_model", "") or settings.IMAGE_T2I_MODEL
-        vlm_model = input_data.get("vlm_model", "qwen3.5-plus")
+        t2i_model = self._require_input(input_data, "image_t2i_model")
+        vlm_model = self._require_input(input_data, "vlm_model")
         # 根据 enable_concurrency 决定并发数
         enable_concurrency = input_data.get("enable_concurrency", True)
         logger.info(f"[CharacterAgent] enable_concurrency={enable_concurrency}")
@@ -392,9 +392,9 @@ class CharacterDesignerAgent(AgentInterface):
         img_client = ImageClient(
             dashscope_api_key=settings.DASHSCOPE_API_KEY,
             dashscope_base_url=settings.DASHSCOPE_BASE_URL,
-            gpt_api_key=os.getenv("OPENAI_API_KEY"),
-            gpt_base_url=os.getenv("OPENAI_BASE_URL"),
-            local_proxy=settings.LOCAL_PROXY,
+            gpt_api_key=settings.OPENAI_API_KEY,
+            gpt_base_url=settings.OPENAI_BASE_URL,
+            proxy=settings.provider_proxy("openai"),
             ark_api_key=settings.ARK_API_KEY,
             ark_base_url=settings.ARK_BASE_URL,
         )

@@ -495,6 +495,9 @@ export default function WorkflowPanel() {
         video_model: params.video_model,
         scene_number: result.params?.scene_number,
         expand_idea: params.expand_idea,
+        enable_concurrency: params.enable_concurrency,
+        web_search: params.web_search,
+        episodes: params.episodes,
         auto_mode: useAutoMode,
       };
 

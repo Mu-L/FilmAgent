@@ -9,6 +9,7 @@ import logging
 import requests
 import base64
 from typing import Optional
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,8 @@ class SeedanceVideoClient:
         base_url: Optional[str] = None,
         timeout: int = 120,
     ) -> None:
-        self.api_key = api_key or os.getenv("ARK_API_KEY")
-        self.base_url = (base_url or os.getenv("ARK_BASE_URL") or "https://ark.cn-beijing.volces.com/api/v3").rstrip("/")
+        self.api_key = api_key or Config.ARK_API_KEY
+        self.base_url = (base_url or Config.ARK_BASE_URL or "https://ark.cn-beijing.volces.com/api/v3").rstrip("/")
         self.timeout = timeout
 
         if not self.api_key:
@@ -114,7 +115,13 @@ class SeedanceVideoClient:
                 payload[key] = kwargs[key]
 
         logger.info(f"SeedanceVideoClient: 提交任务 model={model}, duration={duration}s")
-        resp = requests.post(url, headers=self._headers(), json=payload, timeout=self.timeout)
+        resp = requests.post(
+            url,
+            headers=self._headers(),
+            json=payload,
+            timeout=self.timeout,
+            proxies=Config.requests_proxies("ark"),
+        )
         
         if not resp.ok:
             logger.error(f"Seedance 提交失败: {resp.text}")
@@ -132,7 +139,12 @@ class SeedanceVideoClient:
         url = f"{self.base_url}/contents/generations/tasks/{task_id}"
         
         for i in range(max_polls):
-            resp = requests.get(url, headers=self._headers(), timeout=30)
+            resp = requests.get(
+                url,
+                headers=self._headers(),
+                timeout=30,
+                proxies=Config.requests_proxies("ark"),
+            )
             resp.raise_for_status()
             data = resp.json()
             
@@ -154,7 +166,7 @@ class SeedanceVideoClient:
 
     def _download_video(self, url: str, save_path: str):
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        resp = requests.get(url, stream=True, timeout=120)
+        resp = requests.get(url, stream=True, timeout=120, proxies=Config.requests_proxies("ark"))
         resp.raise_for_status()
         with open(save_path, "wb") as f:
             for chunk in resp.iter_content(chunk_size=8192):
@@ -183,7 +195,7 @@ if __name__ == "__main__":
     base_url = Config.ARK_BASE_URL
     
     if not api_key:
-        print("✗ ARK_API_KEY 未设置，请检查 .env 配置")
+        print("✗ ARK_API_KEY 未设置，请检查 config.yaml 配置")
         sys.exit(1)
 
     if not os.path.exists(IMAGE_PATH):

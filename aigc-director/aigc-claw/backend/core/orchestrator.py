@@ -47,6 +47,44 @@ STAGE_ORDER = [
     WorkflowStage.POST_PRODUCTION,
 ]
 
+SESSION_META_KEYS = (
+    "idea",
+    "user_textbox_input",
+    "style",
+    "video_ratio",
+    "expand_idea",
+    "llm_model",
+    "vlm_model",
+    "image_t2i_model",
+    "image_it2i_model",
+    "video_model",
+    "enable_concurrency",
+    "web_search",
+    "episodes",
+)
+
+
+def _normalize_meta_value(value: Any) -> Any:
+    if isinstance(value, str):
+        lower = value.lower()
+        if lower == "true":
+            return True
+        if lower == "false":
+            return False
+    return value
+
+
+def _extract_session_meta(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Restore session-level generation params from nested or legacy flat storage."""
+    meta: Dict[str, Any] = {}
+    nested_meta = data.get("meta")
+    if isinstance(nested_meta, dict):
+        meta.update({k: _normalize_meta_value(v) for k, v in nested_meta.items() if v is not None})
+    for key in SESSION_META_KEYS:
+        if key in data and data[key] is not None:
+            meta[key] = _normalize_meta_value(data[key])
+    return meta
+
 
 class WorkflowState:
     """工作流状态"""
@@ -106,7 +144,9 @@ class WorkflowEngine:
 
     def get_or_create_state(self, session_id: str) -> WorkflowState:
         if session_id not in self.sessions:
-            self.sessions[session_id] = WorkflowState(session_id=session_id)
+            loaded_state = self.get_state(session_id)
+            if loaded_state is None:
+                self.sessions[session_id] = WorkflowState(session_id=session_id)
         if session_id not in self._stop_events:
             self._stop_events[session_id] = threading.Event()
         return self.sessions[session_id]
@@ -144,7 +184,7 @@ class WorkflowEngine:
                     state.status = loaded_status
 
                 state.artifacts = data.get('artifacts', {})
-                state.meta = data.get('meta', {})
+                state.meta = _extract_session_meta(data)
                 state.updated_at = data.get('updated_at', 0)
 
                 # 缓存到内存
@@ -593,7 +633,10 @@ class WorkflowEngine:
 
         data["session_id"] = session_id
         if meta:
-            for k, v in meta.items():
+            normalized_meta = {k: _normalize_meta_value(v) for k, v in meta.items() if v is not None}
+            if state:
+                state.meta.update(normalized_meta)
+            for k, v in normalized_meta.items():
                 data[k] = v
         if "created_at" not in data:
             data["created_at"] = time.time()
@@ -607,16 +650,12 @@ class WorkflowEngine:
             data["error"] = state.error
             data["updated_at"] = state.updated_at.timestamp() if isinstance(state.updated_at, datetime) else time.time()
             
-            # 保存元数据（将 meta 中的键展开到根目录下）
+            # 保存元数据：nested meta 是主结构；根字段保留给旧会话文件和外部读写兼容。
             if state.meta:
+                data["meta"] = copy.deepcopy(state.meta)
                 for k, v in state.meta.items():
                     if v is not None:
-                        if isinstance(v, str) and v.lower() == 'true':
-                            data[k] = True
-                        elif isinstance(v, str) and v.lower() == 'false':
-                            data[k] = False
-                        else:
-                            data[k] = v
+                        data[k] = _normalize_meta_value(v)
         else:
             data["updated_at"] = time.time()
 
@@ -675,10 +714,7 @@ class WorkflowEngine:
                 state.artifacts = data.get("artifacts", {})
                 state.error = data.get("error")
                 state.updated_at = data.get("updated_at", 0)
-                state.meta = {k: data[k] for k in
-                              ("idea", "style", "llm_model", "image_t2i_model",
-                               "image_it2i_model", "video_model")
-                              if k in data}
+                state.meta = _extract_session_meta(data)
                 self.sessions[sid] = state
             except json.JSONDecodeError:
                 logger.warning(f"Skipping corrupted session file: {filename}")
@@ -702,7 +738,7 @@ class WorkflowEngine:
         result_base = settings.RESULT_DIR
 
         # 删除剧本文件
-        script_file = os.path.join(result_base, 'script', f'script_{session_id}.json')
+        script_file = os.path.join(result_base, 'script', f'{session_id}.json')
         if os.path.exists(script_file):
             os.remove(script_file)
 

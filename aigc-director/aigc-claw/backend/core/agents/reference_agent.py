@@ -478,10 +478,10 @@ class ReferenceGeneratorAgent(AgentInterface):
         style = input_data.get("style", "anime")
         video_ratio = input_data.get("video_ratio", "16:9")
         resolution = input_data.get("resolution", "2K")
-        llm_model = input_data.get("llm_model", "") or settings.LLM_MODEL
-        t2i = input_data.get("image_t2i_model", "") or settings.IMAGE_T2I_MODEL
-        it2i = input_data.get("image_it2i_model", "") or settings.IMAGE_IT2I_MODEL
-        vlm_model = input_data.get("vlm_model", "") or settings.VLM_MODEL
+        llm_model = self._require_input(input_data, "llm_model")
+        t2i = self._require_input(input_data, "image_t2i_model")
+        it2i = self._require_input(input_data, "image_it2i_model")
+        vlm_model = self._require_input(input_data, "vlm_model")
         # 根据 enable_concurrency 决定并发数
         enable_concurrency = input_data.get("enable_concurrency", True)
         logger.info(f"[ReferenceAgent] enable_concurrency={enable_concurrency}")
@@ -505,9 +505,9 @@ class ReferenceGeneratorAgent(AgentInterface):
         img_client = ImageClient(
             dashscope_api_key=settings.DASHSCOPE_API_KEY,
             dashscope_base_url=settings.DASHSCOPE_BASE_URL,
-            gpt_api_key=os.getenv("OPENAI_API_KEY"),
-            gpt_base_url=os.getenv("OPENAI_BASE_URL"),
-            local_proxy=settings.LOCAL_PROXY,
+            gpt_api_key=settings.OPENAI_API_KEY,
+            gpt_base_url=settings.OPENAI_BASE_URL,
+            proxy=settings.provider_proxy("openai"),
             ark_api_key=settings.ARK_API_KEY,
             ark_base_url=settings.ARK_BASE_URL,
         )

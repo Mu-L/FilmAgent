@@ -17,6 +17,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from PIL import Image
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,11 @@ class _TLSAdapter(HTTPAdapter):
         return super().init_poolmanager(*args, **kwargs)
 
 
-def _build_session(max_retries: int = 3) -> requests.Session:
+def _build_session(max_retries: int = 3, proxy: str = "") -> requests.Session:
     """创建带 TLS 适配器和自动重试的 requests Session"""
     session = requests.Session()
+    if proxy:
+        session.proxies.update({"http": proxy, "https": proxy})
     retry = Retry(
         total=max_retries,
         backoff_factor=1,
@@ -74,9 +77,9 @@ class KlingVideoClient:
             poll_interval: 轮询间隔（秒）
             max_polls:  最大轮询次数
         """
-        self.access_key = access_key or os.getenv("KLING_ACCESS_KEY", "")
-        self.secret_key = secret_key or os.getenv("KLING_SECRET_KEY", "")
-        self.base_url = (base_url or os.getenv("KLING_BASE_URL", "")).rstrip("/") or KLING_BASE_URL
+        self.access_key = access_key or Config.KLING_ACCESS_KEY
+        self.secret_key = secret_key or Config.KLING_SECRET_KEY
+        self.base_url = (base_url or Config.KLING_BASE_URL).rstrip("/") or KLING_BASE_URL
         self.token_ttl = token_ttl
         self.poll_interval = poll_interval
         self.max_polls = max_polls
@@ -87,7 +90,7 @@ class KlingVideoClient:
             )
 
         # 使用强制 TLS 1.2 + 自动重试的 Session
-        self._session = _build_session()
+        self._session = _build_session(proxy=Config.provider_proxy("kling"))
 
     # ─── JWT 鉴权 ───
 
@@ -395,7 +398,7 @@ if __name__ == "__main__":
     sk = Config.KLING_SECRET_KEY
     base_url = Config.KLING_BASE_URL
     if not ak or not sk:
-        print("✗ KLING_ACCESS_KEY / KLING_SECRET_KEY 未设置，请检查 .env 配置")
+        print("✗ KLING_ACCESS_KEY / KLING_SECRET_KEY 未设置，请检查 config.yaml 配置")
         sys.exit(1)
 
     if not os.path.exists(IMAGE_PATH):

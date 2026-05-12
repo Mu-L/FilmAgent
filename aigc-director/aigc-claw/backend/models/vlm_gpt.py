@@ -3,9 +3,7 @@
 OpenAI GPT 多模态大模型 API 客户端
 支持 gpt-4o, gpt-5.4 (未来版本) 等视觉模型
 
-逻辑：
-- 如果未传入 base_url，使用官方 URL 并启用本地代理
-- 如果传入 base_url，则直接使用，不启用代理
+代理由 provider 的 enable_proxy 决定，通过 httpx.Client 注入到 OpenAI SDK。
 """
 
 import os
@@ -15,6 +13,7 @@ import httpx
 import logging
 from openai import OpenAI
 from typing import Dict, List, Optional
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ class GPTVLClient:
     def __init__(self,
                  api_key: Optional[str] = None,
                  base_url: Optional[str] = None,
-                 local_proxy: Optional[str] = None,
+                 proxy: Optional[str] = None,
                  timeout: float = 60.0):
         """
         GPT 多模态客户端
@@ -34,20 +33,18 @@ class GPTVLClient:
         :param base_url: 自定义 Base URL（如果传入，则不使用本地代理）
         :param timeout: 超时时间
         """
-        # 优先使用传入的 api_key，否则从环境变量读取
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        # 优先使用传入的 api_key，否则从 config.yaml 读取
+        self.api_key = api_key or Config.OPENAI_API_KEY
         self.timeout = timeout
         
         kwargs = {"api_key": self.api_key, "timeout": self.timeout}
         
-        # 代理逻辑：
-        # 1. 如果传入了 base_url，则不使用本地代理
-        # 2. 如果没传入 base_url，则使用默认值并尝试开启本地代理
         self.base_url = base_url
-        local_proxy = local_proxy
-        if not self.base_url and local_proxy:
+        if proxy is None:
+            proxy = Config.provider_proxy("openai")
+        if proxy:
             kwargs["http_client"] = httpx.Client(
-                proxy=local_proxy,
+                proxy=proxy,
                 timeout=self.timeout,
             )
         if self.base_url:
@@ -148,7 +145,7 @@ if __name__ == "__main__":
     if not Config.OPENAI_API_KEY:
         print("✗ 未设置 OPENAI_API_KEY，跳过")
         sys.exit(1)
-    client = GPTVLClient(api_key=Config.OPENAI_API_KEY, base_url=Config.OPENAI_BASE_URL, local_proxy=Config.LOCAL_PROXY)
+    client = GPTVLClient(api_key=Config.OPENAI_API_KEY, base_url=Config.OPENAI_BASE_URL, proxy=Config.provider_proxy("openai"))
     
     # 支持的 VLM 模型列表，包含用户要求的 gpt-5.4
     MODELS = ["gpt-5.4"]
