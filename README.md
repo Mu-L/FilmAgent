@@ -69,6 +69,27 @@ Pipeline 任务元数据保存在 `aigc-director/aigc-claw/backend/code/data/tas
 ## 📺 AIGC-Claw 示例（全流程自动化）
 ## 🎬 视频生成演示 (Demo Gallery)
 
+### 🔊 新示例：deepseek-v4 震撼发布
+使用 deepseek-v4 + gpt-image-2 + happy-horse-1.0 生成
+
+<div align="center">
+<table style="width:80%;">
+  <tr>
+    <td width="50%" align="center">
+      <video src="https://github.com/user-attachments/assets/627e961e-bd0e-449c-987e-9bae34b669c7" controls width="100%" preload="none"></video>
+      <br><b>▶️ 第一集（9.9MB）</b>
+    </td>
+    <td width="50%" align="center">
+      <a href="https://github.com/user-attachments/assets/ebb47cb8-fa9f-4557-b70c-ff6368ee0b6c" target="_blank">
+        <img src="https://github.com/user-attachments/assets/9a11761a-e1b6-4c3e-8521-21dddb298671" alt="deepseek-v4 封面" width="100%" />
+      </a>
+      <br><b>▶️ 第一集（原画质）</b>
+    </td>
+  </tr>
+</table>
+</div>
+
+
 ### 📱 系列一：程序员被裁后利用 openclaw 收购原公司 (写实 短剧)
 > 共 8 集，跌宕起伏的逆袭之路（首次生成 6 集 + 续写 2 集）
 
