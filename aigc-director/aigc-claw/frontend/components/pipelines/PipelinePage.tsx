@@ -649,6 +649,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
   const [titleValue, setTitleValue] = useState('');
   const [standardSegmentCount, setStandardSegmentCount] = useState(6);
   const [enableSubtitles, setEnableSubtitles] = useState(false);
+  const [subtitleRenderMode, setSubtitleRenderMode] = useState<'postprocess' | 'image_model'>('postprocess');
   const [promptText, setPromptText] = useState('');
   const [imagePath, setImagePath] = useState('');
   const [videoPath, setVideoPath] = useState('');
@@ -832,6 +833,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
             image_model: imageModel,
             video_ratio: ratio,
             enable_subtitles: templateMode ? true : enableSubtitles,
+            subtitle_render_mode: !templateMode && enableSubtitles ? subtitleRenderMode : undefined,
             subtitle_template: templateMode ? selectedTemplate?.id : undefined,
             subtitle_template_fields: templateMode ? templateFieldValues : undefined,
             tts_voice: ttsVoice,
@@ -1086,16 +1088,40 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
                 生成配置
               </button>
               {pipeline === 'standard' && (
-                <label className="flex items-center gap-2 h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={templateMode || enableSubtitles}
-                    onChange={e => setEnableSubtitles(e.target.checked)}
-                    disabled={templateMode}
-                    className="w-4 h-4 rounded border-gray-300"
-                  />
-                  添加标题和字幕
-                </label>
+                <>
+                  <label className="flex items-center gap-2 h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={templateMode || enableSubtitles}
+                      onChange={e => setEnableSubtitles(e.target.checked)}
+                      disabled={templateMode}
+                      className="w-4 h-4 rounded border-gray-300"
+                    />
+                    添加标题和字幕
+                  </label>
+                  {!templateMode && enableSubtitles && (
+                    <div className="grid h-9 grid-cols-2 rounded-lg bg-gray-100 p-1 text-xs">
+                      {[
+                        { id: 'postprocess', label: 'PIL 后期叠字' },
+                        { id: 'image_model', label: '模型直接生成字幕' },
+                      ].map(item => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setSubtitleRenderMode(item.id as 'postprocess' | 'image_model')}
+                          className={clsx(
+                            'rounded-md px-3 font-medium transition-colors',
+                            subtitleRenderMode === item.id
+                              ? 'bg-white text-blue-600 shadow-sm'
+                              : 'text-gray-500 hover:text-gray-700'
+                          )}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
               {error && <span className="text-xs text-red-500 truncate">{error}</span>}
               <button

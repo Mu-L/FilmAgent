@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+from typing import Optional
 
 from models.llm_client import LLM
 from prompts.loader import format_prompt, load_prompt
@@ -90,15 +91,30 @@ def parse_image_prompts_response(text: str, expected_count: int) -> list[str]:
     return image_prompts
 
 
-def build_image_prompt(visual_prompt: str, style_control: str) -> str:
+def build_image_prompt(
+    visual_prompt: str,
+    style_control: str,
+    *,
+    subtitle: Optional[str] = None,
+    render_subtitle_in_image: bool = False,
+) -> str:
     style = style_control.strip()
     no_text_instruction = (
         "Do not include any text, captions, logos, watermarks, labels, typography, "
         "or written characters in the image."
     )
+    text_in_pic_instruction = (
+        "Render exactly one subtitle directly inside the image: "
+        f"\"{subtitle or ''}\". Place this subtitle in a visually appropriate area "
+        "that does not cover the main subject, using readable typography that matches "
+        "the image style, strong contrast, balanced spacing, and clean composition. "
+        "Copy the subtitle text exactly, preserving language, characters, and punctuation. "
+        "Do not add a title. Do not add logos, watermarks, labels, or any other text."
+    )
+    text_instruction = text_in_pic_instruction if render_subtitle_in_image else no_text_instruction
     if not style:
-        return f"{no_text_instruction}\n{visual_prompt}"
-    return f"{style}\n{no_text_instruction}\n{visual_prompt}"
+        return f"{text_instruction}\n{visual_prompt}"
+    return f"{style}\n{text_instruction}\n{visual_prompt}"
 
 
 async def generate_image_prompts(
@@ -106,6 +122,8 @@ async def generate_image_prompts(
     style_control: str,
     llm: LLM,
     llm_model: str,
+    *,
+    render_subtitle_in_image: bool = False,
 ) -> list[str]:
     template = load_prompt("pipelines", "standard_image_prompt_generation", "en")
     prompt = format_prompt(
@@ -115,7 +133,15 @@ async def generate_image_prompts(
     )
     response = await run_blocking(llm.query, prompt, model=llm_model)
     visual_prompts = parse_image_prompts_response(response, len(narrations))
-    return [build_image_prompt(visual_prompt, style_control) for visual_prompt in visual_prompts]
+    return [
+        build_image_prompt(
+            visual_prompt,
+            style_control,
+            subtitle=narrations[idx],
+            render_subtitle_in_image=render_subtitle_in_image,
+        )
+        for idx, visual_prompt in enumerate(visual_prompts)
+    ]
 
 
 async def generate_narrations_from_inspiration(
@@ -182,6 +208,14 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         raise ValueError("standard pipeline requires image_model")
     image_resolution = params.get("image_resolution") or "1080P"
     enable_subtitles = bool(params.get("enable_subtitles", False))
+    subtitle_render_mode = params.get("subtitle_render_mode") or "postprocess"
+    if subtitle_render_mode not in {"postprocess", "image_model"}:
+        subtitle_render_mode = "postprocess"
+    render_subtitle_in_image = (
+        enable_subtitles
+        and subtitle_render_mode == "image_model"
+        and not params.get("subtitle_template")
+    )
     subtitle_template = params.get("subtitle_template")
     subtitle_template_fields = params.get("subtitle_template_fields") or {}
     template_media = template_media_spec(subtitle_template, video_ratio) if subtitle_template else None
@@ -198,14 +232,28 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
     if llm is None:
         llm = LLM()
     try:
-        image_prompts = await generate_image_prompts(narrations, style_control, llm, llm_model)
+        image_prompts = await generate_image_prompts(
+            narrations,
+            style_control,
+            llm,
+            llm_model,
+            render_subtitle_in_image=render_subtitle_in_image,
+        )
     except Exception as exc:
         logger.warning(
             "Failed to generate structured image prompts, fallback to narration prompts: task_id=%s error=%s",
             task_id,
             exc,
         )
-        image_prompts = [build_image_prompt(narration, style_control) for narration in narrations]
+        image_prompts = [
+            build_image_prompt(
+                narration,
+                style_control,
+                subtitle=narration,
+                render_subtitle_in_image=render_subtitle_in_image,
+            )
+            for narration in narrations
+        ]
 
     storyboard = {
         "title": title,
@@ -214,6 +262,7 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         "segment_count": len(narrations),
         "video_mode": "dynamic_video" if dynamic_video else "image_concat",
         "style_control": style_control,
+        "subtitle_render_mode": subtitle_render_mode,
         "subtitle_template": subtitle_template,
         "subtitle_template_fields": subtitle_template_fields,
         "template_media": template_media,
@@ -283,8 +332,8 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         duration = media_duration_seconds(audio_path) or 3.0
         clip_image_path = image_path
         if enable_subtitles:
-            captioned_image_path = os.path.join(output_dir, f"captioned_image_{idx:02d}.jpg")
             if subtitle_template:
+                captioned_image_path = os.path.join(output_dir, f"captioned_image_{idx:02d}.jpg")
                 clip_image_path = await run_blocking(
                     render_template_text_image,
                     image_path,
@@ -296,7 +345,8 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
                     template_values=subtitle_template_fields,
                     index=idx,
                 )
-            else:
+            elif subtitle_render_mode == "postprocess":
+                captioned_image_path = os.path.join(output_dir, f"captioned_image_{idx:02d}.jpg")
                 clip_image_path = await run_blocking(
                     render_static_text_image,
                     image_path,
@@ -305,10 +355,14 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
                     title=title or None,
                     video_ratio=video_ratio,
                 )
-            captioned_artifact = artifact(clip_image_path, "image", f"captioned_image_{idx:02d}")
-            artifacts.append(captioned_artifact)
-            append_artifact(task_id, captioned_artifact)
-            storyboard["frames"][idx - 1]["captioned_image_path"] = clip_image_path
+            else:
+                storyboard["frames"][idx - 1]["captioned_image_path"] = clip_image_path
+                storyboard["frames"][idx - 1]["subtitle_rendered_in_image"] = True
+            if subtitle_template or subtitle_render_mode == "postprocess":
+                captioned_artifact = artifact(clip_image_path, "image", f"captioned_image_{idx:02d}")
+                artifacts.append(captioned_artifact)
+                append_artifact(task_id, captioned_artifact)
+                storyboard["frames"][idx - 1]["captioned_image_path"] = clip_image_path
         video_path = os.path.join(output_dir, f"video_{idx:02d}.mp4")
         if dynamic_video:
             video_only_segment_path = os.path.join(output_dir, f"video_{idx:02d}_motion.mp4")
@@ -369,6 +423,7 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         "videos": videos,
         "video_mode": "dynamic_video" if dynamic_video else "image_concat",
         "video_model": video_model if dynamic_video else None,
+        "subtitle_render_mode": subtitle_render_mode,
         "subtitle_template": subtitle_template,
         "subtitle_template_fields": subtitle_template_fields,
         "template_media": template_media,

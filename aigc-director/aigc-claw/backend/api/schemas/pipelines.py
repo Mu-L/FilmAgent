@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -21,6 +21,7 @@ class StandardPipelineRequest(BaseModel):
     generate_audio: bool = True
     generate_videos: bool = False
     enable_subtitles: bool = False
+    subtitle_render_mode: Literal["postprocess", "image_model"] = "postprocess"
     subtitle_template: Optional[str] = None
     subtitle_template_fields: Optional[Dict[str, str]] = None
     video_duration: int = 5
