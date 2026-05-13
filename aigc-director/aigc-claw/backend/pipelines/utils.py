@@ -1,16 +1,33 @@
 import asyncio
+import base64
 import json
 import logging
+import math
 import os
 import re
 import shutil
 import subprocess
+import sys
+from html import escape
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
+from config import BASE_DIR
+
 logger = logging.getLogger(__name__)
+
+TEMPLATE_FIELD_DEFAULTS = {
+    "title": "山河入梦",
+    "text": "心之所向，素履而往",
+    "author": "HITsz-TMG",
+    "describe": "开源AIGC智能体",
+    "brand": "AIGC-Claw",
+    "signature": "HITsz-TMG",
+    "subtitle": "这是一个副标题",
+}
+CUSTOM_TEMPLATE_FIELDS = ("author", "describe", "brand", "signature", "subtitle")
 
 
 def write_text(path: str, content: str) -> str:
@@ -295,6 +312,199 @@ def render_static_text_image(
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     Image.alpha_composite(image, overlay).convert("RGB").save(output_path, quality=95)
     logger.info("Rendered static title/subtitle image: %s -> %s", image_path, output_path)
+    return output_path
+
+
+def ratio_from_size(width: int, height: int) -> str:
+    if width <= 0 or height <= 0:
+        return "1:1"
+    divisor = max(1, math.gcd(width, height))
+    return f"{width // divisor}:{height // divisor}"
+
+
+def _template_size_from_id(template_id: str) -> tuple[str, int, int]:
+    size = str(template_id or "").split("/", 1)[0]
+    if size == "1920x1080":
+        return size, 1920, 1080
+    if size == "1080x1080":
+        return size, 1080, 1080
+    if size == "1080x1920":
+        return size, 1080, 1920
+    raise ValueError(f"Unsupported subtitle template size: {template_id}")
+
+
+def _resolve_template_path(template_id: str, video_ratio: str) -> tuple[str, int, int]:
+    if "/" in str(template_id):
+        size, filename = str(template_id).split("/", 1)
+        _, width, height = _template_size_from_id(template_id)
+    else:
+        width, height = _resolution_from_ratio(video_ratio)
+        size = f"{width}x{height}"
+        filename = str(template_id)
+    if "/" in filename or "\\" in filename or not filename.endswith(".html"):
+        raise ValueError(f"Invalid subtitle template: {template_id}")
+    path = (BASE_DIR / "templates" / size / filename).resolve()
+    root = (BASE_DIR / "templates" / size).resolve()
+    if not str(path).startswith(str(root) + os.sep) or not path.exists():
+        raise FileNotFoundError(f"Subtitle template not found: {template_id}")
+    return str(path), width, height
+
+
+def template_media_spec(template_id: str, video_ratio: str = "9:16") -> dict[str, Any]:
+    template_path, _, _ = _resolve_template_path(template_id, video_ratio)
+    with open(template_path, "r", encoding="utf-8") as f:
+        raw = f.read()
+    width_match = re.search(
+        r'<meta\s+name=["\']template:media-width["\']\s+content=["\'](\d+)["\']',
+        raw,
+        re.I,
+    )
+    height_match = re.search(
+        r'<meta\s+name=["\']template:media-height["\']\s+content=["\'](\d+)["\']',
+        raw,
+        re.I,
+    )
+    if not width_match or not height_match:
+        raise ValueError(f"Subtitle template missing media size metadata: {template_id}")
+    width = int(width_match.group(1))
+    height = int(height_match.group(1))
+    return {
+        "media_width": width,
+        "media_height": height,
+        "media_ratio": ratio_from_size(width, height),
+        "media_resolution": f"{width}*{height}",
+    }
+
+
+def parse_template_placeholders(raw: str) -> list[dict[str, str]]:
+    placeholders = []
+    for match in re.finditer(r"\{\{\s*([^{}]+?)\s*\}\}", raw):
+        token = match.group(1).strip()
+        key = token.split(":", 1)[0].split("=", 1)[0].strip()
+        field_type = token.split(":", 1)[1].split("=", 1)[0].strip() if ":" in token else "text"
+        default = token.split("=", 1)[1].strip() if "=" in token else ""
+        placeholders.append({
+            "key": key,
+            "type": field_type,
+            "default": TEMPLATE_FIELD_DEFAULTS.get(key, default),
+        })
+    return placeholders
+
+
+def template_custom_fields(template_id: str, video_ratio: str = "9:16") -> list[dict[str, str]]:
+    template_path, _, _ = _resolve_template_path(template_id, video_ratio)
+    with open(template_path, "r", encoding="utf-8") as f:
+        placeholders = parse_template_placeholders(f.read())
+
+    fields = []
+    seen = set()
+    for item in placeholders:
+        key = item["key"]
+        if key not in CUSTOM_TEMPLATE_FIELDS or key in seen:
+            continue
+        seen.add(key)
+        fields.append(item)
+    return fields
+
+
+def _image_data_uri(path: str) -> str:
+    if path.startswith(("http://", "https://", "data:", "file:")):
+        return path
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Image not found: {path}")
+    suffix = Path(path).suffix.lower()
+    mime = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+    }.get(suffix, "image/png")
+    with open(path, "rb") as f:
+        encoded = base64.b64encode(f.read()).decode("ascii")
+    return f"data:{mime};base64,{encoded}"
+
+
+def _render_template_html(raw: str, values: dict[str, Any]) -> str:
+    def repl(match: re.Match) -> str:
+        token = match.group(1).strip()
+        key = token.split(":", 1)[0].split("=", 1)[0].strip()
+        if key in values:
+            return escape(str(values[key] or ""), quote=True)
+        if "=" in token:
+            return escape(token.split("=", 1)[1].strip(), quote=True)
+        return ""
+
+    return re.sub(r"\{\{\s*([^{}]+?)\s*\}\}", repl, raw)
+
+
+def _install_playwright_chromium() -> None:
+    cmd = [sys.executable, "-m", "playwright", "install", "chromium"]
+    logger.info("Installing Playwright Chromium for HTML subtitle templates")
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "Playwright is installed, but Chromium is missing and automatic installation failed. "
+            "Run `python -m playwright install chromium` manually and retry."
+        ) from exc
+
+
+def _launch_playwright_chromium(playwright):
+    try:
+        return playwright.chromium.launch(headless=True)
+    except Exception as exc:
+        message = str(exc)
+        if "Executable doesn't exist" not in message and "playwright install" not in message:
+            raise
+        _install_playwright_chromium()
+        return playwright.chromium.launch(headless=True)
+
+
+def render_template_text_image(
+    image_path: str,
+    output_path: str,
+    *,
+    subtitle: str,
+    title: Optional[str] = None,
+    video_ratio: str = "9:16",
+    template_id: str,
+    template_values: Optional[dict[str, Any]] = None,
+    index: int = 1,
+) -> str:
+    template_path, width, height = _resolve_template_path(template_id, video_ratio)
+    with open(template_path, "r", encoding="utf-8") as f:
+        raw = f.read()
+    html = _render_template_html(
+        raw,
+        {
+            **TEMPLATE_FIELD_DEFAULTS,
+            **(template_values or {}),
+            "title": title or TEMPLATE_FIELD_DEFAULTS["title"],
+            "text": subtitle or "",
+            "image": _image_data_uri(image_path),
+            "index": index,
+        },
+    )
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise RuntimeError(
+            "HTML subtitle templates require Playwright. "
+            "Install backend dependencies again or run `pip install playwright`."
+        ) from exc
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with sync_playwright() as playwright:
+        browser = _launch_playwright_chromium(playwright)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1)
+            page.set_content(html, wait_until="networkidle", timeout=30000)
+            page.screenshot(path=output_path, full_page=False, type="jpeg", quality=95)
+        finally:
+            browser.close()
+    logger.info("Rendered HTML template subtitle image: template=%s image=%s -> %s", template_id, image_path, output_path)
     return output_path
 
 

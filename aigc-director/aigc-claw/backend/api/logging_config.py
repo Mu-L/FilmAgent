@@ -8,7 +8,7 @@ _listener = None
 
 
 class AIGCFormatter(logging.Formatter):
-    """Compact, Pixelle-like console formatter for API and worker logs."""
+    """Custom log formatter that adds level icons for better readability."""
 
     LEVEL_ICONS = {
         "DEBUG": ".",

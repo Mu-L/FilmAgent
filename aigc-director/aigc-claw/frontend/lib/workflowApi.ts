@@ -83,6 +83,22 @@ export interface ApiModelOption {
   capabilities?: Record<string, any>;
 }
 
+export interface StandardTemplateOption {
+  id: string;
+  name: string;
+  label: string;
+  size: string;
+  ratio: '9:16' | '1:1' | '16:9' | string;
+  width: number;
+  height: number;
+  media_width: number;
+  media_height: number;
+  media_ratio: string;
+  media_resolution: string;
+  fields: Array<{ key: string; type: string; default: string }>;
+  preview_url: string;
+}
+
 export async function fetchStages(): Promise<StageInfo[]> {
   const resp = await fetch('/api/stages');
   const data = await resp.json();
@@ -151,6 +167,13 @@ export async function fetchApiModels(params: {
   if (!resp.ok) throw new Error('获取模型列表失败');
   const data = await resp.json();
   return data.models || [];
+}
+
+export async function fetchStandardTemplates(): Promise<StandardTemplateOption[]> {
+  const resp = await fetch('/api/pipelines/standard/templates');
+  if (!resp.ok) throw new Error('获取模版列表失败');
+  const data = await resp.json();
+  return data.templates || [];
 }
 
 export async function uploadPipelineMedia(file: File): Promise<{ filename: string; file_path: string }> {

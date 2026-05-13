@@ -15,8 +15,10 @@ from .utils import (
     create_static_image_clip,
     media_duration_seconds,
     render_static_text_image,
+    render_template_text_image,
     replace_video_audio,
     run_blocking,
+    template_media_spec,
     write_json,
     write_text,
 )
@@ -180,6 +182,11 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         raise ValueError("standard pipeline requires image_model")
     image_resolution = params.get("image_resolution") or "1080P"
     enable_subtitles = bool(params.get("enable_subtitles", False))
+    subtitle_template = params.get("subtitle_template")
+    subtitle_template_fields = params.get("subtitle_template_fields") or {}
+    template_media = template_media_spec(subtitle_template, video_ratio) if subtitle_template else None
+    media_video_ratio = template_media["media_ratio"] if template_media else video_ratio
+    media_resolution = template_media["media_resolution"] if template_media else image_resolution
     video_mode = params.get("video_mode") or "image_concat"
     dynamic_video = video_mode == "dynamic_video" or bool(params.get("generate_videos", False))
     video_model = params.get("video_model")
@@ -207,6 +214,9 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         "segment_count": len(narrations),
         "video_mode": "dynamic_video" if dynamic_video else "image_concat",
         "style_control": style_control,
+        "subtitle_template": subtitle_template,
+        "subtitle_template_fields": subtitle_template_fields,
+        "template_media": template_media,
         "frames": [
             {"index": idx + 1, "narration": narration, "image_prompt": image_prompts[idx]}
             for idx, narration in enumerate(narrations)
@@ -232,8 +242,8 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
             model=image_model,
             output_dir=output_dir,
             task_id=task_id,
-            video_ratio=video_ratio,
-            resolution=image_resolution,
+            video_ratio=media_video_ratio,
+            resolution=media_resolution,
         )
         images.append(image_path)
         image_artifact = artifact(image_path, "image", f"image_{idx:02d}")
@@ -274,14 +284,27 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         clip_image_path = image_path
         if enable_subtitles:
             captioned_image_path = os.path.join(output_dir, f"captioned_image_{idx:02d}.jpg")
-            clip_image_path = await run_blocking(
-                render_static_text_image,
-                image_path,
-                captioned_image_path,
-                subtitle=narrations[idx - 1],
-                title=title or None,
-                video_ratio=video_ratio,
-            )
+            if subtitle_template:
+                clip_image_path = await run_blocking(
+                    render_template_text_image,
+                    image_path,
+                    captioned_image_path,
+                    subtitle=narrations[idx - 1],
+                    title=title or None,
+                    video_ratio=video_ratio,
+                    template_id=subtitle_template,
+                    template_values=subtitle_template_fields,
+                    index=idx,
+                )
+            else:
+                clip_image_path = await run_blocking(
+                    render_static_text_image,
+                    image_path,
+                    captioned_image_path,
+                    subtitle=narrations[idx - 1],
+                    title=title or None,
+                    video_ratio=video_ratio,
+                )
             captioned_artifact = artifact(clip_image_path, "image", f"captioned_image_{idx:02d}")
             artifacts.append(captioned_artifact)
             append_artifact(task_id, captioned_artifact)
@@ -346,6 +369,9 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         "videos": videos,
         "video_mode": "dynamic_video" if dynamic_video else "image_concat",
         "video_model": video_model if dynamic_video else None,
+        "subtitle_template": subtitle_template,
+        "subtitle_template_fields": subtitle_template_fields,
+        "template_media": template_media,
         "video_only_path": video_only_path,
         "final_video": final_path,
     }

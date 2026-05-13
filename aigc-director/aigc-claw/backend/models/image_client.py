@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import uuid
 import logging
@@ -75,7 +76,8 @@ class ImageClient:
             save_dir: Custom directory to save downloaded images.
             session_id: Session ID for organizing saved files.
             video_ratio: Aspect ratio of the video, e.g., "16:9", "9:16", "4:3", "3:4", "1:1".
-            resolution: Resolution string, e.g., "720P", "1080P", "2K", "4K".
+            resolution: Resolution string, e.g., "720P", "1080P", "2K", "4K",
+                or an exact media-slot size such as "1024*1024".
 
         Returns:
             List of absolute file paths of the generated images.
@@ -114,8 +116,12 @@ class ImageClient:
             }
         }
         
+        custom_size = None
+        if isinstance(resolution, str) and re.match(r"^\d+[x*]\d+$", resolution):
+            custom_size = resolution.replace("x", "*")
+
         # Default fallback if ratio or resolution is not found
-        size = size_map.get(video_ratio, size_map["16:9"]).get(resolution, "1920*1080")
+        size = custom_size or size_map.get(video_ratio, size_map["16:9"]).get(resolution, "1920*1080")
 
         if not model:
             model = "wan2.7-image"  # Default model

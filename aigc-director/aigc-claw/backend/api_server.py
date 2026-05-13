@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Compatibility entrypoint for the AIGC-Claw FastAPI server.
-
-The application is organized under the ``api`` package following the
-Pixelle-Video router/schema layout, while this file keeps the historical
-``python api_server.py`` startup command working.
+"""
+Compatibility entrypoint for the AIGC-Claw FastAPI server.
 """
 
 import os

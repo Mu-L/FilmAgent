@@ -24,6 +24,7 @@ import {
 import clsx from 'clsx';
 import {
   fetchApiModels,
+  fetchStandardTemplates,
   deletePipelineTask,
   fetchPipelineTask,
   fetchPipelineTasks,
@@ -35,6 +36,7 @@ import {
   type PipelineTask,
   type PipelineTaskEvent,
   type ApiModelOption,
+  type StandardTemplateOption,
 } from '@/lib/workflowApi';
 import {
   I2I_PROVIDERS,
@@ -63,6 +65,19 @@ const DEFAULTS = {
 
 const DEFAULT_STANDARD_STYLE_CONTROL =
   'Minimalist black-and-white matchstick figure style illustration, clean lines, simple sketch style';
+
+const TEMPLATE_TEXT_DEFAULTS = {
+  title: '山河入梦',
+  text: '心之所向，素履而往',
+};
+
+const TEMPLATE_FIELD_LABELS: Record<string, string> = {
+  author: 'author',
+  describe: 'describe',
+  brand: 'brand',
+  signature: 'signature',
+  subtitle: 'subtitle',
+};
 
 const STATUS_STYLE: Record<string, string> = {
   pending: 'bg-gray-100 text-gray-500',
@@ -449,6 +464,56 @@ function TaskResult({ task }: { task: PipelineTask | null }) {
   );
 }
 
+function TemplatePreviewCard({
+  template,
+  selected,
+  onClick,
+}: {
+  template: StandardTemplateOption;
+  selected?: boolean;
+  onClick?: () => void;
+}) {
+  const ratioClass = template.ratio === '16:9'
+    ? 'aspect-[16/9] w-36'
+    : template.ratio === '1:1'
+      ? 'aspect-square w-28'
+      : 'aspect-[9/16] w-24';
+  const scale = template.ratio === '16:9'
+    ? 0.075
+    : template.ratio === '1:1'
+      ? 0.105
+      : 0.089;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        'group flex-shrink-0 rounded-lg border bg-white p-1.5 text-left transition-all',
+        selected ? 'border-blue-400 ring-2 ring-blue-100' : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+      )}
+      title={template.label}
+    >
+      <div className={clsx('relative overflow-hidden rounded-md bg-gray-100', ratioClass)}>
+        <iframe
+          src={template.preview_url}
+          title={template.label}
+          className="pointer-events-none absolute left-0 top-0 border-0 bg-white"
+          style={{
+            width: template.width,
+            height: template.height,
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+          }}
+        />
+      </div>
+      <div className="mt-1 max-w-36 truncate text-[10px] font-medium text-gray-500 group-hover:text-blue-600">
+        {template.label}
+      </div>
+    </button>
+  );
+}
+
 function PipelineHistory({
   pipeline,
   activeTaskId,
@@ -577,6 +642,10 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
   const [text, setText] = useState('');
   const [standardMode, setStandardMode] = useState<'inspiration' | 'copy'>('inspiration');
   const [standardVideoMode, setStandardVideoMode] = useState<'image_concat' | 'dynamic_video'>('image_concat');
+  const [templateMode, setTemplateMode] = useState(false);
+  const [templates, setTemplates] = useState<StandardTemplateOption[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [templateFieldValues, setTemplateFieldValues] = useState<Record<string, string>>({});
   const [titleValue, setTitleValue] = useState('');
   const [standardSegmentCount, setStandardSegmentCount] = useState(6);
   const [enableSubtitles, setEnableSubtitles] = useState(false);
@@ -635,11 +704,73 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
     }
   }, [pipeline, standardVideoMode]);
 
+  useEffect(() => {
+    if (pipeline !== 'standard') return;
+    fetchStandardTemplates()
+      .then(items => {
+        setTemplates(items);
+        setSelectedTemplateId(current => current || items.find(item => item.ratio === ratio)?.id || items[0]?.id || '');
+      })
+      .catch(() => {});
+  }, [pipeline, ratio]);
+
+  useEffect(() => {
+    if (!templateMode) return;
+    setEnableSubtitles(true);
+    setStandardVideoMode('image_concat');
+    setText(current => current || TEMPLATE_TEXT_DEFAULTS.text);
+    setTitleValue(current => current || TEMPLATE_TEXT_DEFAULTS.title);
+    setSelectedTemplateId(current => {
+      if (current && templates.some(item => item.id === current && item.ratio === ratio)) return current;
+      return templates.find(item => item.ratio === ratio)?.id || current;
+    });
+  }, [templateMode, ratio, templates]);
+
+  const portraitTemplates = useMemo(
+    () => templates.filter(item => item.size === '1080x1920'),
+    [templates]
+  );
+  const ratioTemplates = useMemo(
+    () => templates.filter(item => item.ratio === ratio),
+    [templates, ratio]
+  );
+  const selectedTemplate = useMemo(
+    () => templates.find(item => item.id === selectedTemplateId) || null,
+    [templates, selectedTemplateId]
+  );
+  const selectedTemplateFields = useMemo(
+    () => selectedTemplate?.fields || [],
+    [selectedTemplate]
+  );
+
+  useEffect(() => {
+    if (!templateMode) return;
+    if (!selectedTemplateFields.length) {
+      setTemplateFieldValues({});
+      return;
+    }
+    setTemplateFieldValues(current => {
+      const next: Record<string, string> = {};
+      for (const field of selectedTemplateFields) {
+        next[field.key] = current[field.key] ?? field.default ?? '';
+      }
+      return next;
+    });
+  }, [templateMode, selectedTemplateFields]);
+
+  const enterTemplateMode = () => {
+    setTemplateMode(true);
+    setEnableSubtitles(true);
+    setStandardVideoMode('image_concat');
+    setText(current => current || TEMPLATE_TEXT_DEFAULTS.text);
+    setTitleValue(current => current || TEMPLATE_TEXT_DEFAULTS.title);
+  };
+
   const canSubmit = useMemo(() => {
-    if (pipeline === 'standard') return text.trim().length > 0;
+    if (pipeline === 'standard') return text.trim().length > 0 && (!templateMode || Boolean(selectedTemplate));
     if (pipeline === 'action_transfer') return promptText.trim() && imagePath.trim() && videoPath.trim();
     return characterImage.trim() && goodsText.trim();
-  }, [pipeline, text, promptText, imagePath, videoPath, characterImage, goodsText]);
+  }, [pipeline, text, templateMode, selectedTemplate, promptText, imagePath, videoPath, characterImage, goodsText]);
 
   useEffect(() => {
     if (!task || !['pending', 'running'].includes(task.status)) return;
@@ -700,14 +831,16 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
             llm_model: llmModel,
             image_model: imageModel,
             video_ratio: ratio,
-            enable_subtitles: enableSubtitles,
+            enable_subtitles: templateMode ? true : enableSubtitles,
+            subtitle_template: templateMode ? selectedTemplate?.id : undefined,
+            subtitle_template_fields: templateMode ? templateFieldValues : undefined,
             tts_voice: ttsVoice,
             tts_speed: ttsSpeed,
             style_control: negativePrompt || undefined,
             segment_count: standardMode === 'inspiration' ? standardSegmentCount : undefined,
-            video_mode: standardVideoMode,
-            video_model: standardVideoMode === 'dynamic_video' ? videoModel : undefined,
-            video_duration: standardVideoMode === 'dynamic_video' ? duration : undefined,
+            video_mode: templateMode ? 'image_concat' : standardVideoMode,
+            video_model: !templateMode && standardVideoMode === 'dynamic_video' ? videoModel : undefined,
+            video_duration: !templateMode && standardVideoMode === 'dynamic_video' ? duration : undefined,
           })
         : pipeline === 'action_transfer'
           ? await startActionTransferPipeline({
@@ -751,24 +884,105 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
           <p className="text-sm text-gray-500">{subtitle}</p>
         </div>
 
+        {pipeline === 'standard' && (
+          <section className="mb-5 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  if (templateMode) setTemplateMode(false);
+                  else enterTemplateMode();
+                }}
+                className={clsx(
+                  'h-10 flex-shrink-0 rounded-xl px-4 text-sm font-medium transition-colors',
+                  templateMode
+                    ? 'bg-gray-900 text-white hover:bg-gray-800'
+                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                )}
+              >
+                {templateMode ? '返回自定义生成模式' : '使用精品模版'}
+              </button>
+              <div className="min-w-0 flex-1 overflow-x-auto">
+                <div className="flex gap-3 pb-1">
+                  {portraitTemplates.length ? (
+                    portraitTemplates.map(item => (
+                      <TemplatePreviewCard
+                        key={item.id}
+                        template={item}
+                        selected={templateMode && selectedTemplateId === item.id}
+                        onClick={() => {
+                          enterTemplateMode();
+                          setRatio(item.ratio);
+                          setSelectedTemplateId(item.id);
+                        }}
+                      />
+                    ))
+                  ) : (
+                    <div className="flex h-28 min-w-0 flex-1 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-xs text-gray-400">
+                      暂无 1080x1920 模版
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)] gap-5 items-start">
           <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
             {pipeline === 'standard' && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 h-10 rounded-lg bg-gray-100 p-1 text-sm max-w-sm">
-                  {[
-                    { id: 'image_concat', label: '图片拼接' },
-                    { id: 'dynamic_video', label: '动态视频' },
-                  ].map(item => (
-                    <button
-                      key={item.id}
-                      onClick={() => setStandardVideoMode(item.id as 'image_concat' | 'dynamic_video')}
-                      className={clsx('rounded-md transition-colors', standardVideoMode === item.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500')}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
+                {templateMode ? (
+                  <div className="space-y-3">
+                    <div className="grid h-10 max-w-sm grid-cols-3 rounded-lg bg-gray-100 p-1 text-sm">
+                      {['9:16', '1:1', '16:9'].map(item => (
+                        <button
+                          key={item}
+                          onClick={() => setRatio(item)}
+                          className={clsx('rounded-md transition-colors', ratio === item ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500')}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <div className="mb-2 text-xs font-medium text-gray-500">选择模版</div>
+                      <div className="overflow-x-auto">
+                        <div className="flex gap-3 pb-1">
+                          {ratioTemplates.length ? (
+                            ratioTemplates.map(item => (
+                              <TemplatePreviewCard
+                                key={item.id}
+                                template={item}
+                                selected={selectedTemplateId === item.id}
+                                onClick={() => setSelectedTemplateId(item.id)}
+                              />
+                            ))
+                          ) : (
+                            <div className="flex h-28 min-w-0 flex-1 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white text-xs text-gray-400">
+                              当前比例暂无模版
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 h-10 rounded-lg bg-gray-100 p-1 text-sm max-w-sm">
+                    {[
+                      { id: 'image_concat', label: '图片拼接' },
+                      { id: 'dynamic_video', label: '动态视频' },
+                    ].map(item => (
+                      <button
+                        key={item.id}
+                        onClick={() => setStandardVideoMode(item.id as 'image_concat' | 'dynamic_video')}
+                        className={clsx('rounded-md transition-colors', standardVideoMode === item.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500')}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="rounded-xl border border-yellow-300 bg-yellow-100 px-4 py-3">
                   <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-yellow-900">
                     <Lightbulb className="w-3.5 h-3.5" />
@@ -776,8 +990,8 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
                   </div>
                   <p className="text-sm leading-6 text-yellow-950">
                     {standardVideoMode === 'image_concat'
-                      ? '图片拼接会为每个旁白片段生成一张图片，并配合 TTS 音频合成为静态图文短视频。等待时间主要取决于图片生成速度，通常每张图片约 10-20 秒。'
-                      : '动态视频会先为每个旁白片段生成图片，再调用视频模型把图片扩展为动态片段，最后合成为完整短片。等待时间更长，通常每个视频片段约 1-2 分钟。'}
+                      ? '图片拼接会为每个旁白片段生成一张图片，并配合 TTS 音频合成为静态图文短视频。等待时间主要取决于图片生成速度，通常生成每张图片需 10-20 秒。'
+                      : '动态视频会先为每个旁白片段生成图片，再调用视频模型把图片扩展为动态片段，最后合成为完整短片。等待时间更长，通常生成每个视频片段需 1-2 分钟。'}
                   </p>
                 </div>
                 <div className="grid grid-cols-2 h-10 rounded-lg bg-gray-100 p-1 text-sm max-w-sm">
@@ -806,6 +1020,26 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
                     <NumberField label="片段数量" value={standardSegmentCount} onChange={setStandardSegmentCount} min={1} max={20} />
                   )}
                 </div>
+                {templateMode && selectedTemplateFields.length > 0 && (
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                    <div className="mb-3 text-xs font-medium text-gray-500">自定义字段</div>
+                    <div className="space-y-2">
+                      {selectedTemplateFields.map(field => (
+                        <label key={field.key} className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2">
+                          <span className="text-xs font-medium text-gray-500">{TEMPLATE_FIELD_LABELS[field.key] || field.key}</span>
+                          <input
+                            value={templateFieldValues[field.key] ?? field.default ?? ''}
+                            onChange={event => {
+                              const value = event.target.value;
+                              setTemplateFieldValues(current => ({ ...current, [field.key]: value }));
+                            }}
+                            className="h-9 min-w-0 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -855,8 +1089,9 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
                 <label className="flex items-center gap-2 h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600">
                   <input
                     type="checkbox"
-                    checked={enableSubtitles}
+                    checked={templateMode || enableSubtitles}
                     onChange={e => setEnableSubtitles(e.target.checked)}
+                    disabled={templateMode}
                     className="w-4 h-4 rounded border-gray-300"
                   />
                   添加标题和字幕
