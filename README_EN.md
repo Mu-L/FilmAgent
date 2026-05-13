@@ -6,6 +6,10 @@
   AIGC-Claw: AI Creative Video Production Agent
 </h2>
 
+<p align="center">
+  <a href="./README.md">简体中文</a> | <b>English</b>
+</p>
+
 <h4 align="center">
   <img src="https://img.shields.io/badge/Version-1.0.0-blue.svg" alt="Version">
   <a href="https://github.com/HITsz-TMG/AIGC-Claw/blob/main/LICENSE">
@@ -29,7 +33,7 @@
 
 <div align="center">
 
-🌐 [**中文 README**](./README.md)  📺 [**Bilibili**](https://space.bilibili.com/2031891503?spm_id_from=333.1007.0.0)  ▶️ [**YouTube**](https://www.youtube.com/@imryanxu)  📖 [**Integration Guide**](#method-3-openclaw-auto-setup)  🦀 [**ClawHub**](https://clawhub.ai/hit-cxf/aigc-director)
+📺 [**Bilibili**](https://space.bilibili.com/2031891503?spm_id_from=333.1007.0.0)  ▶️ [**YouTube**](https://www.youtube.com/@imryanxu)  📖 [**Integration Guide**](#method-3-openclaw-auto-setup)  🦀 [**ClawHub**](https://clawhub.ai/hit-cxf/aigc-director)
 
 <a href="https://trendshift.io/repositories/24295" target="_blank"><img src="https://trendshift.io/api/badge/repositories/24295" alt="HITsz-TMG%2FAIGC-Claw | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
@@ -43,6 +47,7 @@
 - `2026/4/9`: ♾️ AIGC-Claw v3 was released, adding infinite continuation and customizable plot development.
 - `2026/4/29`: 🧩 Added three one-shot Pipelines: Artistic Short Video, Action Transfer, and Digital Human Talking Video, together with one-click installation.
 - `2026/5/8`: ⚙️ Added WebUI configuration for API keys and default models, with one-click installation support.
+- `2026/5/13`: 🎞️ Integrated Pixelle-Video HTML templates into the Artistic Short Video Pipeline.
 
 
 ## 📖 Overview
@@ -472,6 +477,8 @@ Model information is defined in `aigc-director/aigc-claw/backend/models/config_m
 ## 🙏 Acknowledgments
 
 The idea and design of AIGC-Claw were inspired by [AutoResearchClaw](https://github.com/aiming-lab/AutoResearchClaw), [huobao-drama](https://github.com/chatfire-AI/huobao-drama), [LibTV](https://www.liblib.tv/), and [libtv-skills](https://github.com/libtv-labs/libtv-skills).
+
+Pixelle-Video: AIGC-Claw draws on its Artistic Short Video, Action Transfer, and Digital Human Talking Video Pipelines, as well as its HTML template approach for precise text control in images and videos.
 
 
 ## 📚 Related Work
