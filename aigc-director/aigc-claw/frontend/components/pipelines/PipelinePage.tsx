@@ -63,8 +63,30 @@ const DEFAULTS = {
   video: VIDEO_PROVIDERS.flatMap(p => p.models).find(m => m.default)?.id || VIDEO_PROVIDERS[0].models[0].id,
 };
 
-const DEFAULT_STANDARD_STYLE_CONTROL =
-  'Minimalist black-and-white matchstick figure style illustration, clean lines, simple sketch style';
+const STANDARD_STYLE_PRESETS = [
+  {
+    label: '印象油画',
+    prompt:
+      'Impressionist painting style, visible broken brushstrokes, pure colors juxtaposed. The scene is bathed in natural, fleeting light with a shimmering, grainy texture in the air. Soft, blurred outlines, emphasizing color contrast over precise lines. Slight oil paint canvas texture, warm and luminous tone.',
+  },
+  {
+    label: '极简线条',
+    prompt:
+      'Minimalist black-and-white matchstick figure style illustration, clean lines, simple sketch style',
+  },
+  {
+    label: '中国水墨',
+    prompt:
+      'Traditional Chinese ink wash painting style, visible xuan paper texture. Layered ink tones from deep black to pale gray, with dry brush strokes (feibai) and natural ink bleeding. Expressive and spontaneous brushwork, large negative space (liubai), interplay between solid and void. Wet and dry contrast, calligraphic rhythm in lines. Minimal color palette, a hint of light ochre or floral blue.',
+  },
+  {
+    label: '写实',
+    prompt:
+      'Photorealistic cinematic style, 8K resolution, physically accurate. Natural or practical lighting with sharp shadow edges. Materials exhibit realistic specular reflection and roughness, subtle surface textures and imperfections visible. Natural depth of field (sharp foreground with blurred background or vice versa). Motion includes inertial easing, mimicking real human eye observation. No stylized filters, true-to-life color reproduction.',
+  },
+];
+
+const DEFAULT_STANDARD_STYLE_CONTROL = STANDARD_STYLE_PRESETS[0].prompt;
 
 const TEMPLATE_TEXT_DEFAULTS = {
   title: '山河入梦',
@@ -1174,6 +1196,25 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
                     className="w-full min-h-[70px] resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-blue-300"
                   />
                 </label>
+                {pipeline === 'standard' && (
+                  <div className="flex flex-wrap gap-2">
+                    {STANDARD_STYLE_PRESETS.map(preset => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => setNegativePrompt(preset.prompt)}
+                        className={clsx(
+                          'h-8 rounded-lg border px-3 text-xs font-medium transition-colors',
+                          negativePrompt === preset.prompt
+                            ? 'border-blue-300 bg-blue-50 text-blue-600'
+                            : 'border-gray-200 bg-white text-gray-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600'
+                        )}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </section>
