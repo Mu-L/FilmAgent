@@ -4,6 +4,13 @@ Seedream 图像生成 API 客户端
 """
 
 import os
+import sys
+
+models_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(models_dir)
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
 import time
 import logging
 import httpx

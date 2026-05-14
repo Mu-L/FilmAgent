@@ -4,6 +4,14 @@ Qwen LLM API 客户端（DashScope Generation API）
 支持 qwen3.5-plus, qwen3.5-max 等模型
 """
 
+import os
+import sys
+
+models_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(models_dir)
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
 import time
 import logging
 from typing import Optional
