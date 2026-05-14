@@ -294,13 +294,24 @@ cd AIGC-Claw
 cd aigc-director/aigc-claw
 chmod +x install.sh
 ./install.sh
+
+# 3. back to root dir
+cd ../..
 ```
 
 Windows users can run the following in PowerShell or CMD:
 
 ```bat
-cd AIGC-Claw\aigc-director\aigc-claw
+# 1. Clone the repository
+git clone https://github.com/HITsz-TMG/AIGC-Claw.git
+cd AIGC-Claw
+
+# 2. Enter the app directory and run the installer
+cd aigc-director\aigc-claw
 install.bat
+
+# 3. back to root dir
+cd ../..
 ```
 
 The installer checks Python, Node.js, npm, and ffmpeg, installs backend and frontend dependencies, copies `backend/config.yaml.example` to `backend/config.yaml`, and builds the frontend. After installation, fill in model service API keys in `backend/config.yaml` and confirm the main-workflow default models under `models`. You can also start the frontend and edit these settings from the "Settings" page at the bottom of the sidebar. Then start the services:
