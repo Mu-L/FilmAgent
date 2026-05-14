@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter
+from fastapi.concurrency import run_in_threadpool
 
 from api.schemas.sandbox import (
     SandboxI2IRequest,
@@ -176,7 +177,12 @@ async def sandbox_llm(req: SandboxLLMRequest):
     client = LLM()
     try:
         logger.info("Sandbox LLM started: model=%s web_search=%s", req.model, req.web_search)
-        result = client.query(req.prompt, model=req.model, web_search=req.web_search)
+        result = await run_in_threadpool(
+            client.query,
+            req.prompt,
+            model=req.model,
+            web_search=req.web_search,
+        )
         # ��存到历史记录
         record_id = _add_record(
             tool="llm",
@@ -198,7 +204,12 @@ async def sandbox_vlm(req: SandboxVLMRequest):
     client = VLM()
     try:
         logger.info("Sandbox VLM started: model=%s images=%d", req.model, len(req.images or []))
-        result = client.query(req.prompt, image_paths=req.images, model=req.model)
+        result = await run_in_threadpool(
+            client.query,
+            req.prompt,
+            image_paths=req.images,
+            model=req.model,
+        )
         # 保存到历史记录
         record_id = _add_record(
             tool="vlm",
@@ -220,7 +231,13 @@ async def sandbox_t2i(req: SandboxT2IRequest):
     client = ImageClient()
     try:
         logger.info("Sandbox T2I started: model=%s ratio=%s", req.model, req.ratio)
-        result = client.generate_image(req.prompt, model=req.model, image_paths=None, video_ratio=req.ratio)
+        result = await run_in_threadpool(
+            client.generate_image,
+            req.prompt,
+            model=req.model,
+            image_paths=None,
+            video_ratio=req.ratio,
+        )
         # result 是图片路径列表
         # 保存到历史记录
         record_id = _add_record(
@@ -249,7 +266,13 @@ async def sandbox_i2i(req: SandboxI2IRequest):
     client = ImageClient()
     try:
         logger.info("Sandbox I2I started: model=%s ratio=%s", req.model, req.ratio)
-        result = client.generate_image(req.prompt, image_paths=[req.image], model=req.model, video_ratio=req.ratio)
+        result = await run_in_threadpool(
+            client.generate_image,
+            req.prompt,
+            image_paths=[req.image],
+            model=req.model,
+            video_ratio=req.ratio,
+        )
         # 保存到历史记录
         record_id = _add_record(
             tool="i2i",
@@ -282,13 +305,14 @@ async def sandbox_video(req: SandboxVideoRequest):
         save_path = os.path.join(save_dir, f"{uuid.uuid4().hex[:8]}.mp4")
         logger.info("Sandbox video started: model=%s image=%s", req.model, bool(req.image))
 
-        result = client.generate_video(
+        result = await run_in_threadpool(
+            client.generate_video,
             prompt=req.prompt,
             image_path=req.image or "",
             save_path=save_path,
             model=req.model,
             duration=5,
-            shot_type="multi"
+            shot_type="multi",
         )
         # 保存到历史记录
         record_id = _add_record(

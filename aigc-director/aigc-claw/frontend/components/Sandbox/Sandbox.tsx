@@ -5,6 +5,7 @@ import { Sparkles, Image, Video, MessageSquare, Zap, Loader2, Copy, Check, Trash
 import { useSearchParams } from 'next/navigation';
 import { LLM_MODELS, T2I_MODELS, I2I_MODELS, VIDEO_MODELS, VLM_MODELS } from '@/config/models';
 import BrandHeader from '@/components/BrandHeader';
+import { uploadMedia } from '@/lib/workflowApi';
 
 // 辅助函数：将相对路径转换为完整 URL
 const toMediaUrl = (path: string) => {
@@ -19,6 +20,20 @@ const toMediaUrl = (path: string) => {
   }
   return path;
 };
+
+async function readJsonResponse(resp: Response) {
+  const text = await resp.text();
+  if (!text.trim()) {
+    if (!resp.ok) throw new Error(`请求失败：${resp.status}`);
+    return {};
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    const preview = text.replace(/\s+/g, ' ').slice(0, 160);
+    throw new Error(resp.ok ? `接口返回了非 JSON 内容：${preview}` : `请求失败：${resp.status} ${preview}`);
+  }
+}
 
 // 工具类型
 type ToolType = 'llm' | 'vlm' | 't2i' | 'i2i' | 'video';
@@ -105,7 +120,14 @@ function ImageUploader({
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [inputMode, setInputMode] = useState<'url' | 'file'>('file');
+  const [previewUrl, setPreviewUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const handleDragOver = (e: DragEvent) => {
     e.preventDefault();
@@ -142,19 +164,15 @@ function ImageUploader({
 
     setUploading(true);
     try {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = reader.result as string;
-        onChange(base64);
-        setUploading(false);
-      };
-      reader.onerror = () => {
-        alert('文件读取失败');
-        setUploading(false);
-      };
-      reader.readAsDataURL(file);
+      const result = await uploadMedia(file);
+      setPreviewUrl(current => {
+        if (current) URL.revokeObjectURL(current);
+        return URL.createObjectURL(file);
+      });
+      onChange(result.file_path);
     } catch (e) {
-      alert('上传失败');
+      alert(e instanceof Error ? e.message : '上传失败');
+    } finally {
       setUploading(false);
     }
   };
@@ -196,7 +214,13 @@ function ImageUploader({
           <input
             type="text"
             value={isUrl ? value : ''}
-            onChange={e => onChange(e.target.value)}
+            onChange={e => {
+              setPreviewUrl(current => {
+                if (current) URL.revokeObjectURL(current);
+                return '';
+              });
+              onChange(e.target.value);
+            }}
             placeholder="https://example.com/image.jpg"
             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
           />
@@ -219,9 +243,21 @@ function ImageUploader({
         <>
           {value && !isUrl ? (
             <div className="relative group">
-              <img src={value} alt="上传的图片" className="max-h-48 rounded-lg border border-gray-200" />
+              {previewUrl ? (
+                <img src={previewUrl} alt="上传的图片" className="max-h-48 rounded-lg border border-gray-200" />
+              ) : (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500 break-all">
+                  已上传：{value}
+                </div>
+              )}
               <button
-                onClick={() => onChange('')}
+                onClick={() => {
+                  setPreviewUrl(current => {
+                    if (current) URL.revokeObjectURL(current);
+                    return '';
+                  });
+                  onChange('');
+                }}
                 className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
               >
                 <X className="w-4 h-4" />
@@ -282,7 +318,7 @@ export default function SandboxPage() {
   const fetchHistory = async () => {
     try {
       const resp = await fetch('/api/sandbox/history');
-      const data = await resp.json();
+      const data = await readJsonResponse(resp);
       if (data.success) {
         setHistory(data.records);
       }
@@ -324,7 +360,7 @@ export default function SandboxPage() {
     setDeleting(id);
     try {
       const resp = await fetch(`/api/sandbox/history/${id}`, { method: 'DELETE' });
-      const data = await resp.json();
+      const data = await readJsonResponse(resp);
       if (data.success) {
         setHistory(history.filter(r => r.id !== id));
         if (selectedRecord?.id === id) {
@@ -448,7 +484,7 @@ export default function SandboxPage() {
         body: JSON.stringify(body),
       });
 
-      const data = await response.json();
+      const data = await readJsonResponse(response);
 
       if (data.success) {
         if (activeTool === 't2i' || activeTool === 'i2i' || activeTool === 'video') {
