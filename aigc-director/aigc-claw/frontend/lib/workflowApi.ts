@@ -167,6 +167,15 @@ export async function fetchSandboxTasks(): Promise<SandboxTask[]> {
   return data.tasks || [];
 }
 
+export async function clearTempCache(): Promise<{ status: string; deleted: number; freed_bytes?: number; freed_mb?: number; errors?: Array<{ path: string; error: string }> }> {
+  const resp = await fetch('/api/cache/temp', { method: 'DELETE' });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: '清空缓存失败' }));
+    throw new Error(err.detail || '清空缓存失败');
+  }
+  return resp.json();
+}
+
 export async function deletePipelineTask(taskId: string): Promise<void> {
   const resp = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
   if (!resp.ok) throw new Error('删除任务失败');

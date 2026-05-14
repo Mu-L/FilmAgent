@@ -36,6 +36,10 @@ const nextConfig: NextConfig = {
         source: '/api/config',
         destination: 'http://127.0.0.1:8000/api/config',
       },
+      {
+        source: '/api/cache/:path*',
+        destination: 'http://127.0.0.1:8000/api/cache/:path*',
+      },
       // 一键 pipeline API
       {
         source: '/api/pipelines',

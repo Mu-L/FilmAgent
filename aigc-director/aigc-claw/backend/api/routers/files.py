@@ -13,6 +13,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Files"])
 
 
+def _path_size(path: str) -> int:
+    if os.path.isfile(path) or os.path.islink(path):
+        return os.path.getsize(path)
+    total = 0
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            item = os.path.join(root, name)
+            try:
+                total += os.path.getsize(item)
+            except OSError:
+                continue
+        for name in dirs:
+            item = os.path.join(root, name)
+            if os.path.islink(item):
+                try:
+                    total += os.path.getsize(item)
+                except OSError:
+                    continue
+    return total
+
+
 @router.post("/api/upload_file")
 async def upload_file(file: UploadFile = File(...)):
     allowed_exts = [".docx", ".doc", ".txt", ".md", ".pdf"]
@@ -58,6 +79,32 @@ async def upload_media(file: UploadFile = File(...)):
     return {
         "filename": filename,
         "file_path": file_path,
+    }
+
+
+@router.delete("/api/cache/temp")
+async def clear_temp_cache():
+    os.makedirs(settings.TEMP_DIR, exist_ok=True)
+    deleted = 0
+    freed_bytes = 0
+    errors = []
+    for entry in os.scandir(settings.TEMP_DIR):
+        try:
+            freed_bytes += _path_size(entry.path)
+            if entry.is_dir(follow_symlinks=False):
+                shutil.rmtree(entry.path)
+            else:
+                os.remove(entry.path)
+            deleted += 1
+        except Exception as exc:
+            logger.warning("Failed to delete temp cache item: %s", entry.path, exc_info=True)
+            errors.append({"path": entry.name, "error": str(exc)})
+    return {
+        "status": "ok",
+        "deleted": deleted,
+        "freed_bytes": freed_bytes,
+        "freed_mb": round(freed_bytes / 1024 / 1024, 2),
+        "errors": errors,
     }
 
 
