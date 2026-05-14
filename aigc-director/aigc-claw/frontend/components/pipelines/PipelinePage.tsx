@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   ArrowRight,
   CheckCircle,
@@ -694,6 +695,7 @@ function PipelineHistory({
 }
 
 export default function PipelinePage({ pipeline, title, subtitle }: PipelinePageProps) {
+  const searchParams = useSearchParams();
   const TitleIcon = PIPELINE_TITLE_ICONS[pipeline];
   const [showSettings, setShowSettings] = useState(false);
   const [running, setRunning] = useState(false);
@@ -888,6 +890,19 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
       },
     );
   }, [task?.task_id, task?.status]);
+
+  useEffect(() => {
+    const taskId = searchParams.get('task');
+    if (!taskId || task?.task_id === taskId) return;
+    fetchPipelineTask(taskId)
+      .then(fresh => {
+        if (fresh.pipeline === pipeline) {
+          setTask(fresh);
+          setRunning(['pending', 'running'].includes(fresh.status));
+        }
+      })
+      .catch(() => {});
+  }, [pipeline, searchParams, task?.task_id]);
 
   const submit = async () => {
     if (!canSubmit || running) return;

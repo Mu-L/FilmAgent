@@ -5,7 +5,7 @@ import { Sparkles, Image, Video, MessageSquare, Zap, Loader2, Copy, Check, Trash
 import { useSearchParams } from 'next/navigation';
 import { LLM_MODELS, T2I_MODELS, I2I_MODELS, VIDEO_MODELS, VLM_MODELS } from '@/config/models';
 import BrandHeader from '@/components/BrandHeader';
-import { uploadMedia } from '@/lib/workflowApi';
+import { fetchSandboxTasks, uploadMedia } from '@/lib/workflowApi';
 
 // 辅助函数：将相对路径转换为完整 URL
 const toMediaUrl = (path: string) => {
@@ -331,28 +331,66 @@ export default function SandboxPage() {
     fetchHistory();
   }, []);
 
+  const applyRecord = (record: HistoryRecord) => {
+    setSelectedRecord(record);
+    setActiveTool(record.tool as ToolType);
+    setSelectedModel(record.model);
+    setPrompt(record.input.prompt || '');
+    setImageUrl(record.input.reference_image || record.input.images?.[0] || '');
+    if (record.output?.response) {
+      setResult(record.output.response);
+    } else {
+      setResult(null);
+    }
+    setCurrentOutput(record.output || null);
+    setLoading(false);
+    setError(null);
+  };
+
   // 检查 URL 参数，自动加载历史记录
   useEffect(() => {
     const recordId = searchParams.get('record');
     if (recordId && history.length > 0) {
       const record = history.find(r => r.id === recordId);
       if (record) {
-        setSelectedRecord(record);
-        // 填充输入框
-        setActiveTool(record.tool as ToolType);
-        setPrompt(record.input.prompt || '');
-        setImageUrl(record.input.reference_image || record.input.images?.[0] || '');
-        // 显示结果
-        if (record.output?.response) {
-          setResult(record.output.response);
-        } else if (record.output?.images?.length) {
-          setResult(null);
-        } else if (record.output?.video_path) {
-          setResult(null);
-        }
-        setCurrentOutput(record.output || null);
+        applyRecord(record);
       }
     }
+  }, [searchParams, history]);
+
+  useEffect(() => {
+    const taskId = searchParams.get('task');
+    if (!taskId) return;
+    let cancelled = false;
+
+    const loadTask = async () => {
+      const historyRecord = history.find(r => r.id === taskId);
+      if (historyRecord) {
+        applyRecord(historyRecord);
+        return;
+      }
+
+      const activeTasks = await fetchSandboxTasks();
+      const activeTask = activeTasks.find(item => item.id === taskId);
+      if (!activeTask || cancelled) return;
+      setActiveTool(activeTask.tool as ToolType);
+      setSelectedModel(activeTask.model);
+      setPrompt(activeTask.input?.prompt || '');
+      setImageUrl(activeTask.input?.reference_image || activeTask.input?.images?.[0] || '');
+      setCurrentOutput(null);
+      setResult(null);
+      setError(null);
+      setLoading(true);
+    };
+
+    loadTask().catch(() => {});
+    const timer = window.setInterval(() => {
+      fetchHistory().then(() => loadTask()).catch(() => {});
+    }, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [searchParams, history]);
 
   // 删除历史记录

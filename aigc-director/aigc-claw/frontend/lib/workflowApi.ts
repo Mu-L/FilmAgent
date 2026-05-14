@@ -53,6 +53,16 @@ export interface PipelineTask {
   output_dir?: string;
 }
 
+export interface SandboxTask {
+  id: string;
+  tool: string;
+  model: string;
+  input?: Record<string, any>;
+  status: string;
+  progress?: number;
+  created_at?: string;
+}
+
 export interface PipelineStartResponse {
   task_id: string;
   pipeline: string;
@@ -148,6 +158,13 @@ export async function fetchPipelineTask(taskId: string): Promise<PipelineTask> {
   const resp = await fetch(`/api/tasks/${taskId}`);
   if (!resp.ok) throw new Error('获取任务状态失败');
   return resp.json();
+}
+
+export async function fetchSandboxTasks(): Promise<SandboxTask[]> {
+  const resp = await fetch('/api/sandbox/tasks');
+  if (!resp.ok) return [];
+  const data = await resp.json();
+  return data.tasks || [];
 }
 
 export async function deletePipelineTask(taskId: string): Promise<void> {

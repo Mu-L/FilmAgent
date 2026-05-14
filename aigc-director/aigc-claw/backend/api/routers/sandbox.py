@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 SANDBOX_DIR = os.path.join(settings.CODE_DIR, "result", "sandbox")
 SANDBOX_HISTORY_FILE = os.path.join(SANDBOX_DIR, "history.json")
+SANDBOX_ACTIVE_TASKS: dict[str, dict] = {}
 
 # 确保目录存在
 os.makedirs(SANDBOX_DIR, exist_ok=True)
@@ -85,9 +86,9 @@ def _convert_output_paths(output_data: dict) -> dict:
     return converted
 
 
-def _add_record(tool: str, model: str, input_data: dict, output_data: dict, files: List[str] = None) -> str:
+def _add_record(tool: str, model: str, input_data: dict, output_data: dict, files: List[str] = None, record_id: str | None = None) -> str:
     """添加历史记录"""
-    record_id = str(uuid.uuid4().hex[:8])
+    record_id = record_id or str(uuid.uuid4().hex[:8])
     # 转换路径为相对路径格式
     output_data = _convert_output_paths(output_data)
     record = {
@@ -103,6 +104,24 @@ def _add_record(tool: str, model: str, input_data: dict, output_data: dict, file
     history.insert(0, record)  # 最新记录放在最前面
     _save_history(history)
     return record_id
+
+
+def _start_active_task(tool: str, model: str, input_data: dict) -> str:
+    task_id = str(uuid.uuid4().hex[:8])
+    SANDBOX_ACTIVE_TASKS[task_id] = {
+        "id": task_id,
+        "tool": tool,
+        "model": model,
+        "input": input_data,
+        "status": "running",
+        "progress": 1,
+        "created_at": datetime.now().isoformat(),
+    }
+    return task_id
+
+
+def _finish_active_task(task_id: str) -> None:
+    SANDBOX_ACTIVE_TASKS.pop(task_id, None)
 
 
 def _delete_record_files(files: List[str]):
@@ -136,6 +155,12 @@ async def sandbox_get_history():
             for r in history
         ]
     }
+
+
+@router.get("/api/sandbox/tasks")
+async def sandbox_get_active_tasks():
+    """获取临时工作台正在执行的任务"""
+    return {"success": True, "tasks": list(SANDBOX_ACTIVE_TASKS.values())}
 
 
 @router.get("/api/sandbox/history/{record_id}")
@@ -175,6 +200,8 @@ async def sandbox_llm(req: SandboxLLMRequest):
     """临时工作台 - LLM 文字生成"""
     from models.llm_client import LLM
     client = LLM()
+    input_data = {"prompt": req.prompt, "web_search": req.web_search}
+    task_id = _start_active_task("llm", req.model, input_data)
     try:
         logger.info("Sandbox LLM started: model=%s web_search=%s", req.model, req.web_search)
         result = await run_in_threadpool(
@@ -187,14 +214,17 @@ async def sandbox_llm(req: SandboxLLMRequest):
         record_id = _add_record(
             tool="llm",
             model=req.model,
-            input_data={"prompt": req.prompt, "web_search": req.web_search},
-            output_data={"response": result}
+            input_data=input_data,
+            output_data={"response": result},
+            record_id=task_id,
         )
         logger.info("Sandbox LLM completed: model=%s record_id=%s", req.model, record_id)
         return {"success": True, "result": result, "record_id": record_id}
     except Exception as e:
         logger.exception("Sandbox LLM failed: model=%s", req.model)
         return {"success": False, "error": str(e)}
+    finally:
+        _finish_active_task(task_id)
 
 
 @router.post("/api/sandbox/vlm")
@@ -202,6 +232,8 @@ async def sandbox_vlm(req: SandboxVLMRequest):
     """临时工作台 - VLM 图片理解"""
     from models.vlm_client import VLM
     client = VLM()
+    input_data = {"prompt": req.prompt, "images": req.images}
+    task_id = _start_active_task("vlm", req.model, input_data)
     try:
         logger.info("Sandbox VLM started: model=%s images=%d", req.model, len(req.images or []))
         result = await run_in_threadpool(
@@ -214,14 +246,17 @@ async def sandbox_vlm(req: SandboxVLMRequest):
         record_id = _add_record(
             tool="vlm",
             model=req.model,
-            input_data={"prompt": req.prompt, "images": req.images},
-            output_data={"response": result}
+            input_data=input_data,
+            output_data={"response": result},
+            record_id=task_id,
         )
         logger.info("Sandbox VLM completed: model=%s record_id=%s", req.model, record_id)
         return {"success": True, "result": result, "record_id": record_id}
     except Exception as e:
         logger.exception("Sandbox VLM failed: model=%s", req.model)
         return {"success": False, "error": str(e)}
+    finally:
+        _finish_active_task(task_id)
 
 
 @router.post("/api/sandbox/t2i")
@@ -229,6 +264,8 @@ async def sandbox_t2i(req: SandboxT2IRequest):
     """临时工作台 - 文生图"""
     from models.image_client import ImageClient
     client = ImageClient()
+    input_data = {"prompt": req.prompt, "style": req.style, "ratio": req.ratio}
+    task_id = _start_active_task("t2i", req.model, input_data)
     try:
         logger.info("Sandbox T2I started: model=%s ratio=%s", req.model, req.ratio)
         result = await run_in_threadpool(
@@ -243,9 +280,10 @@ async def sandbox_t2i(req: SandboxT2IRequest):
         record_id = _add_record(
             tool="t2i",
             model=req.model,
-            input_data={"prompt": req.prompt, "style": req.style, "ratio": req.ratio},
+            input_data=input_data,
             output_data={"images": result},
-            files=result if isinstance(result, list) else []
+            files=result if isinstance(result, list) else [],
+            record_id=task_id,
         )
         logger.info(
             "Sandbox T2I completed: model=%s record_id=%s images=%d",
@@ -257,6 +295,8 @@ async def sandbox_t2i(req: SandboxT2IRequest):
     except Exception as e:
         logger.exception("Sandbox T2I failed: model=%s", req.model)
         return {"success": False, "error": str(e)}
+    finally:
+        _finish_active_task(task_id)
 
 
 @router.post("/api/sandbox/i2i")
@@ -264,6 +304,8 @@ async def sandbox_i2i(req: SandboxI2IRequest):
     """临时工作台 - 图生图"""
     from models.image_client import ImageClient
     client = ImageClient()
+    input_data = {"prompt": req.prompt, "reference_image": req.image}
+    task_id = _start_active_task("i2i", req.model, input_data)
     try:
         logger.info("Sandbox I2I started: model=%s ratio=%s", req.model, req.ratio)
         result = await run_in_threadpool(
@@ -277,9 +319,10 @@ async def sandbox_i2i(req: SandboxI2IRequest):
         record_id = _add_record(
             tool="i2i",
             model=req.model,
-            input_data={"prompt": req.prompt, "reference_image": req.image},
+            input_data=input_data,
             output_data={"images": result},
-            files=result if isinstance(result, list) else []
+            files=result if isinstance(result, list) else [],
+            record_id=task_id,
         )
         logger.info(
             "Sandbox I2I completed: model=%s record_id=%s images=%d",
@@ -291,6 +334,8 @@ async def sandbox_i2i(req: SandboxI2IRequest):
     except Exception as e:
         logger.exception("Sandbox I2I failed: model=%s", req.model)
         return {"success": False, "error": str(e)}
+    finally:
+        _finish_active_task(task_id)
 
 
 @router.post("/api/sandbox/video")
@@ -298,6 +343,8 @@ async def sandbox_video(req: SandboxVideoRequest):
     """临时工作台 - 视频生成"""
     from models.video_client import VideoClient
     client = VideoClient()
+    input_data = {"prompt": req.prompt, "reference_image": req.image}
+    task_id = _start_active_task("video", req.model, input_data)
     try:
         # 生成唯一的保存路径
         save_dir = os.path.join(SANDBOX_DIR, "videos")
@@ -318,12 +365,15 @@ async def sandbox_video(req: SandboxVideoRequest):
         record_id = _add_record(
             tool="video",
             model=req.model,
-            input_data={"prompt": req.prompt, "reference_image": req.image},
+            input_data=input_data,
             output_data={"video": result, "video_path": save_path},
-            files=[save_path]
+            files=[save_path],
+            record_id=task_id,
         )
         logger.info("Sandbox video completed: model=%s record_id=%s video=%s", req.model, record_id, save_path)
         return {"success": True, "result": result, "video_path": save_path, "record_id": record_id}
     except Exception as e:
         logger.exception("Sandbox video failed: model=%s", req.model)
         return {"success": False, "error": str(e)}
+    finally:
+        _finish_active_task(task_id)

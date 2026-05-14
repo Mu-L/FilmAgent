@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Clapperboard, Hexagon, Home, PanelLeftOpen, Repeat2, Settings, UserRound } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { ChevronLeft, ChevronRight, Clapperboard, Clock, Hexagon, Home, Loader2, PanelLeftOpen, Repeat2, Settings, UserRound } from 'lucide-react';
 import clsx from 'clsx';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { fetchPipelineTasks, fetchSandboxTasks, fetchSessions, type PipelineTask, type SandboxTask } from '@/lib/workflowApi';
 
 const NAV_ITEMS = [
   { href: '/', label: 'AIGC-Claw', icon: Home },
@@ -15,6 +16,171 @@ const NAV_ITEMS = [
 ];
 
 const SETTINGS_ITEM = { href: '/settings', label: '设置', icon: Settings };
+
+const PIPELINE_ROUTES: Record<string, { href: string; label: string }> = {
+  standard: { href: '/pipelines/standard', label: '文艺短视频' },
+  action_transfer: { href: '/pipelines/action-transfer', label: '动作迁移' },
+  digital_human: { href: '/pipelines/digital-human', label: '数字人口播' },
+};
+
+const TASK_STATUS_STYLE: Record<string, string> = {
+  pending: 'bg-gray-100 text-gray-500',
+  running: 'bg-blue-50 text-blue-600',
+  completed: 'bg-green-50 text-green-600',
+  failed: 'bg-red-50 text-red-600',
+};
+
+function statusText(status?: string) {
+  if (status === 'pending') return '等待中';
+  if (status === 'running') return '生成中';
+  if (status === 'completed') return '已完成';
+  if (status === 'failed') return '失败';
+  return status || '未知';
+}
+
+function taskTitle(task: PipelineTask) {
+  const input = task.input || {};
+  return input.title || input.goods_title || input.text || input.prompt_text || input.goods_text || task.task_id;
+}
+
+type RunningTaskItem = {
+  id: string;
+  href: string;
+  title: string;
+  scope: string;
+  status: string;
+  progress: number;
+};
+
+const WORKFLOW_STAGE_COUNT = 7;
+
+function projectTaskFromSession(session: any): RunningTaskItem | null {
+  const statusMap = session.status || {};
+  const values = Object.values(statusMap);
+  if (!values.includes('running')) return null;
+  const completed = values.filter(value => ['completed', 'session_completed'].includes(String(value))).length;
+  const runningStage = Object.keys(statusMap).find(key => statusMap[key] === 'running');
+  return {
+    id: `project-${session.id}`,
+    href: `/?session=${encodeURIComponent(session.id)}`,
+    title: session.idea || session.id,
+    scope: runningStage ? `主流程 · ${runningStage}` : '主流程',
+    status: 'running',
+    progress: Math.round((completed / WORKFLOW_STAGE_COUNT) * 100),
+  };
+}
+
+function pipelineTaskItem(task: PipelineTask): RunningTaskItem | null {
+  const route = PIPELINE_ROUTES[task.pipeline];
+  if (!route || !['pending', 'running'].includes(task.status)) return null;
+  return {
+    id: `pipeline-${task.task_id}`,
+    href: `${route.href}?task=${encodeURIComponent(task.task_id)}`,
+    title: String(taskTitle(task)),
+    scope: route.label,
+    status: task.status,
+    progress: task.progress || 0,
+  };
+}
+
+const SANDBOX_TOOL_LABELS: Record<string, string> = {
+  llm: 'LLM',
+  vlm: 'VLM',
+  t2i: '文生图',
+  i2i: '图生图',
+  video: '视频生成',
+};
+
+function sandboxTaskItem(task: SandboxTask): RunningTaskItem {
+  const input = task.input || {};
+  return {
+    id: `sandbox-${task.id}`,
+    href: `/sandbox?task=${encodeURIComponent(task.id)}`,
+    title: input.prompt || input.reference_image || task.id,
+    scope: `临时工作台 · ${SANDBOX_TOOL_LABELS[task.tool] || task.tool}`,
+    status: task.status || 'running',
+    progress: task.progress || 1,
+  };
+}
+
+function RunningTaskList({ currentPath }: { currentPath: string }) {
+  const router = useRouter();
+  const [tasks, setTasks] = useState<RunningTaskItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [pipelineRecords, sessions, sandboxRecords] = await Promise.all([
+        fetchPipelineTasks(100).catch(() => []),
+        fetchSessions().catch(() => []),
+        fetchSandboxTasks().catch(() => []),
+      ]);
+      setTasks([
+        ...sandboxRecords.map(sandboxTaskItem),
+        ...pipelineRecords.map(pipelineTaskItem).filter((task): task is RunningTaskItem => Boolean(task)),
+        ...sessions.map(projectTaskFromSession).filter((task): task is RunningTaskItem => Boolean(task)),
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load().catch(() => {});
+    const timer = window.setInterval(() => load().catch(() => {}), 3000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <section className="h-[30vh] min-h-44 border-t border-gray-100 p-3">
+      <div className="mb-2 flex items-center gap-2 px-1">
+        <Clock className="h-3.5 w-3.5 text-gray-400" />
+        <span className="text-xs font-medium text-gray-500">进行中任务</span>
+        {loading && <Loader2 className="ml-auto h-3 w-3 animate-spin text-gray-300" />}
+      </div>
+      <div className="h-[calc(100%-26px)] overflow-y-auto pr-1">
+        {tasks.length ? (
+          <div className="space-y-1.5">
+            {tasks.map(task => {
+              const active = currentPath === task.href.split('?')[0];
+              return (
+                <button
+                  key={task.id}
+                  type="button"
+                  onClick={() => router.push(task.href)}
+                  className={clsx(
+                    'w-full rounded-lg border px-2.5 py-2 text-left transition-colors',
+                    active ? 'border-blue-100 bg-blue-50/60' : 'border-gray-100 bg-white hover:border-blue-200 hover:bg-blue-50/40'
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-700">
+                      {task.title.slice(0, 36)}
+                    </span>
+                    <span className={clsx('flex-shrink-0 rounded px-1.5 py-0.5 text-[10px]', TASK_STATUS_STYLE[task.status] || TASK_STATUS_STYLE.pending)}>
+                      {statusText(task.status)}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="truncate text-[10px] text-gray-400">{task.scope}</span>
+                    <div className="h-1 min-w-10 flex-1 overflow-hidden rounded-full bg-gray-100">
+                      <div className="h-full rounded-full bg-blue-500" style={{ width: `${task.progress || 0}%` }} />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-gray-100 text-xs text-gray-300">
+            暂无进行中任务
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -28,14 +194,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           open ? 'w-60' : 'w-0 border-r-0'
         )}
       >
-        <div className={clsx('h-full overflow-hidden transition-opacity duration-200', open ? 'opacity-100' : 'opacity-0')}>
+        <div className={clsx('flex h-full flex-col overflow-hidden transition-opacity duration-200', open ? 'opacity-100' : 'opacity-0')}>
           <div className="flex h-16 items-center px-4 border-b border-gray-100">
             <div className="flex items-center gap-2 min-w-0">
               <PanelLeftOpen className="w-4 h-4 text-blue-500 flex-shrink-0" />
               <span className="text-sm font-semibold text-gray-800 truncate">AIGC-Claw</span>
             </div>
           </div>
-          <nav className="p-3 pb-20 space-y-1">
+          <nav className="min-h-0 flex-1 overflow-y-auto p-3 space-y-1">
             {NAV_ITEMS.map(item => {
               const Icon = item.icon;
               const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
@@ -56,7 +222,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-          <div className="absolute bottom-0 left-0 right-0 border-t border-gray-100 p-3">
+          <RunningTaskList currentPath={pathname} />
+          <div className="border-t border-gray-100 p-3">
             {(() => {
               const Icon = SETTINGS_ITEM.icon;
               const active = pathname.startsWith(SETTINGS_ITEM.href);
