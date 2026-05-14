@@ -16,6 +16,7 @@ from .utils import (
     create_static_image_clip,
     media_duration_seconds,
     render_static_text_image,
+    render_template_media_video,
     render_template_text_image,
     replace_video_audio,
     run_blocking,
@@ -219,13 +220,19 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
     subtitle_template = params.get("subtitle_template")
     subtitle_template_fields = params.get("subtitle_template_fields") or {}
     template_media = template_media_spec(subtitle_template, video_ratio) if subtitle_template else None
+    template_media_kind = params.get("template_media_kind") or "image"
+    if template_media_kind not in {"image", "video"}:
+        template_media_kind = "image"
+    template_video_mode = bool(subtitle_template and template_media_kind == "video")
+    if template_video_mode and template_media and not template_media.get("supports_video"):
+        raise ValueError(f"Subtitle template does not support video media: {subtitle_template}")
     media_video_ratio = template_media["media_ratio"] if template_media else video_ratio
     media_resolution = template_media["media_resolution"] if template_media else image_resolution
     video_mode = params.get("video_mode") or "image_concat"
     dynamic_video = video_mode == "dynamic_video" or bool(params.get("generate_videos", False))
     video_model = params.get("video_model")
-    if dynamic_video and not video_model:
-        raise ValueError("standard pipeline dynamic_video mode requires video_model")
+    if (dynamic_video or template_video_mode) and not video_model:
+        raise ValueError("standard pipeline video generation requires video_model")
     video_duration = clamp_segment_count(params.get("video_duration") or params.get("duration") or 5, default=5)
 
     update_task(task_id, progress=9, message="Generating image prompts")
@@ -260,11 +267,12 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         "mode": mode,
         "input_text": text,
         "segment_count": len(narrations),
-        "video_mode": "dynamic_video" if dynamic_video else "image_concat",
+        "video_mode": "template_video" if template_video_mode else ("dynamic_video" if dynamic_video else "image_concat"),
         "style_control": style_control,
         "subtitle_render_mode": subtitle_render_mode,
         "subtitle_template": subtitle_template,
         "subtitle_template_fields": subtitle_template_fields,
+        "template_media_kind": template_media_kind,
         "template_media": template_media,
         "frames": [
             {"index": idx + 1, "narration": narration, "image_prompt": image_prompts[idx]}
@@ -327,12 +335,47 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         update_task(
             task_id,
             progress=70 + int(20 * idx / len(images)),
-            message=f"{'Generating dynamic video' if dynamic_video else 'Creating static clip'} {idx}/{len(images)}",
+            message=f"{'Rendering template video' if template_video_mode else ('Generating dynamic video' if dynamic_video else 'Creating static clip')} {idx}/{len(images)}",
         )
         duration = media_duration_seconds(audio_path) or 3.0
         clip_image_path = image_path
-        if enable_subtitles:
-            if subtitle_template:
+        video_path = os.path.join(output_dir, f"video_{idx:02d}.mp4")
+        if enable_subtitles or (subtitle_template and template_video_mode):
+            if subtitle_template and template_video_mode:
+                media_video_path = os.path.join(output_dir, f"template_media_{idx:02d}.mp4")
+                await run_blocking(
+                    generate_video_api,
+                    prompt=image_prompts[idx - 1],
+                    model=video_model,
+                    output_path=media_video_path,
+                    image_path=image_path,
+                    duration=max(video_duration, int(duration + 0.999)),
+                    video_ratio=media_video_ratio,
+                )
+                storyboard["frames"][idx - 1]["template_media_video_path"] = media_video_path
+
+                template_video_path = os.path.join(output_dir, f"video_{idx:02d}_template.mp4")
+                await run_blocking(
+                    render_template_media_video,
+                    media_video_path,
+                    template_video_path,
+                    poster_image_path=image_path,
+                    subtitle=narrations[idx - 1],
+                    title=title or None,
+                    video_ratio=video_ratio,
+                    template_id=subtitle_template,
+                    template_values=subtitle_template_fields,
+                    index=idx,
+                    duration=duration,
+                )
+                storyboard["frames"][idx - 1]["template_video_path"] = template_video_path
+                video_path = await run_blocking(
+                    replace_video_audio,
+                    template_video_path,
+                    audio_path,
+                    video_path,
+                )
+            elif subtitle_template:
                 captioned_image_path = os.path.join(output_dir, f"captioned_image_{idx:02d}.jpg")
                 clip_image_path = await run_blocking(
                     render_template_text_image,
@@ -358,13 +401,14 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
             else:
                 storyboard["frames"][idx - 1]["captioned_image_path"] = clip_image_path
                 storyboard["frames"][idx - 1]["subtitle_rendered_in_image"] = True
-            if subtitle_template or subtitle_render_mode == "postprocess":
+            if not template_video_mode and (subtitle_template or subtitle_render_mode == "postprocess"):
                 captioned_artifact = artifact(clip_image_path, "image", f"captioned_image_{idx:02d}")
                 artifacts.append(captioned_artifact)
                 append_artifact(task_id, captioned_artifact)
                 storyboard["frames"][idx - 1]["captioned_image_path"] = clip_image_path
-        video_path = os.path.join(output_dir, f"video_{idx:02d}.mp4")
-        if dynamic_video:
+        if subtitle_template and template_video_mode:
+            pass
+        elif dynamic_video:
             video_only_segment_path = os.path.join(output_dir, f"video_{idx:02d}_motion.mp4")
             await run_blocking(
                 generate_video_api,
@@ -421,11 +465,12 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         "images": images,
         "audios": audios,
         "videos": videos,
-        "video_mode": "dynamic_video" if dynamic_video else "image_concat",
-        "video_model": video_model if dynamic_video else None,
+        "video_mode": "template_video" if template_video_mode else ("dynamic_video" if dynamic_video else "image_concat"),
+        "video_model": video_model if (dynamic_video or template_video_mode) else None,
         "subtitle_render_mode": subtitle_render_mode,
         "subtitle_template": subtitle_template,
         "subtitle_template_fields": subtitle_template_fields,
+        "template_media_kind": template_media_kind,
         "template_media": template_media,
         "video_only_path": video_only_path,
         "final_video": final_path,

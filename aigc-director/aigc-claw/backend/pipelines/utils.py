@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from html import escape
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -373,7 +374,21 @@ def template_media_spec(template_id: str, video_ratio: str = "9:16") -> dict[str
         "media_height": height,
         "media_ratio": ratio_from_size(width, height),
         "media_resolution": f"{width}*{height}",
+        "supports_video": template_supports_video_media(raw),
     }
+
+
+def template_supports_video_media(raw: str) -> bool:
+    visible_raw = re.sub(r"<!--.*?-->", "", raw, flags=re.S)
+    if re.search(r"\{\{\s*media(?:[:=][^{}]*)?\s*\}\}", visible_raw):
+        return True
+    return bool(
+        re.search(
+            r"<img\b[^>]*\bsrc=[\"']\{\{\s*image\s*\}\}[\"'][^>]*>",
+            visible_raw,
+            re.I,
+        )
+    )
 
 
 def parse_template_placeholders(raw: str) -> list[dict[str, str]]:
@@ -425,17 +440,85 @@ def _image_data_uri(path: str) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
-def _render_template_html(raw: str, values: dict[str, Any]) -> str:
+def _render_template_html(raw: str, values: dict[str, Any], raw_keys: Optional[set[str]] = None) -> str:
+    raw_keys = raw_keys or set()
+
     def repl(match: re.Match) -> str:
         token = match.group(1).strip()
         key = token.split(":", 1)[0].split("=", 1)[0].strip()
         if key in values:
+            if key in raw_keys:
+                return str(values[key] or "")
             return escape(str(values[key] or ""), quote=True)
         if "=" in token:
             return escape(token.split("=", 1)[1].strip(), quote=True)
         return ""
 
     return re.sub(r"\{\{\s*([^{}]+?)\s*\}\}", repl, raw)
+
+
+def _media_file_uri(path: str) -> str:
+    if path.startswith(("http://", "https://", "data:", "file:")):
+        return path
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Media not found: {path}")
+    return Path(path).resolve().as_uri()
+
+
+def _template_media_element(src: str, media_kind: str) -> str:
+    attrs = 'class="template-media" style="width:100%;height:100%;object-fit:cover;display:block;"'
+    if media_kind == "video":
+        return f'<video {attrs} src="{escape(src, quote=True)}" muted playsinline preload="auto"></video>'
+    return f'<img {attrs} src="{escape(src, quote=True)}" alt="">'
+
+
+def _inject_template_media_css(raw: str) -> str:
+    css = (
+        "<style>"
+        ".template-media{width:100%;height:100%;object-fit:cover;display:block;}"
+        "video.template-media{background:#000;}"
+        "</style>"
+    )
+    if "</head>" in raw:
+        return raw.replace("</head>", f"{css}</head>", 1)
+    return css + raw
+
+
+def _prepare_template_media_html(raw: str, *, media_kind: str) -> str:
+    prepared = _inject_template_media_css(raw)
+    if media_kind != "video":
+        return prepared
+    if re.search(r"\{\{\s*media(?:[:=][^{}]*)?\s*\}\}", prepared):
+        return prepared
+    return re.sub(
+        r"<img\b[^>]*\bsrc=[\"']\{\{\s*image\s*\}\}[\"'][^>]*>",
+        "{{media}}",
+        prepared,
+        flags=re.I,
+    )
+
+
+def _template_values(
+    *,
+    image_path: str,
+    subtitle: str,
+    title: Optional[str],
+    template_values: Optional[dict[str, Any]],
+    index: int,
+    media_kind: str = "image",
+    media_path: Optional[str] = None,
+) -> dict[str, Any]:
+    image_uri = _image_data_uri(image_path)
+    media_src = _media_file_uri(media_path) if media_kind == "video" and media_path else image_uri
+    return {
+        **TEMPLATE_FIELD_DEFAULTS,
+        **(template_values or {}),
+        "title": title or TEMPLATE_FIELD_DEFAULTS["title"],
+        "text": subtitle or "",
+        "image": image_uri,
+        "media": _template_media_element(media_src, media_kind),
+        "index": index,
+    }
 
 
 def _install_playwright_chromium() -> None:
@@ -474,17 +557,17 @@ def render_template_text_image(
 ) -> str:
     template_path, width, height = _resolve_template_path(template_id, video_ratio)
     with open(template_path, "r", encoding="utf-8") as f:
-        raw = f.read()
+        raw = _prepare_template_media_html(f.read(), media_kind="image")
     html = _render_template_html(
         raw,
-        {
-            **TEMPLATE_FIELD_DEFAULTS,
-            **(template_values or {}),
-            "title": title or TEMPLATE_FIELD_DEFAULTS["title"],
-            "text": subtitle or "",
-            "image": _image_data_uri(image_path),
-            "index": index,
-        },
+        _template_values(
+            image_path=image_path,
+            subtitle=subtitle,
+            title=title,
+            template_values=template_values,
+            index=index,
+        ),
+        raw_keys={"media"},
     )
 
     try:
@@ -505,6 +588,144 @@ def render_template_text_image(
         finally:
             browser.close()
     logger.info("Rendered HTML template subtitle image: template=%s image=%s -> %s", template_id, image_path, output_path)
+    return output_path
+
+
+def render_template_media_video(
+    media_video_path: str,
+    output_path: str,
+    *,
+    poster_image_path: str,
+    subtitle: str,
+    title: Optional[str] = None,
+    video_ratio: str = "9:16",
+    template_id: str,
+    template_values: Optional[dict[str, Any]] = None,
+    index: int = 1,
+    duration: Optional[float] = None,
+    fps: int = 24,
+) -> str:
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise RuntimeError("ffmpeg is required to render HTML template videos.")
+    if not os.path.exists(media_video_path):
+        raise FileNotFoundError(f"Template media video not found: {media_video_path}")
+
+    template_path, width, height = _resolve_template_path(template_id, video_ratio)
+    with open(template_path, "r", encoding="utf-8") as f:
+        raw = f.read()
+    if not template_supports_video_media(raw):
+        raise ValueError(f"Template does not support video media: {template_id}")
+
+    raw = _prepare_template_media_html(raw, media_kind="video")
+    html = _render_template_html(
+        raw,
+        _template_values(
+            image_path=poster_image_path,
+            media_kind="image",
+            subtitle=subtitle,
+            title=title,
+            template_values=template_values,
+            index=index,
+        ),
+        raw_keys={"media"},
+    )
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise RuntimeError(
+            "HTML subtitle templates require Playwright. "
+            "Install backend dependencies again or run `pip install playwright`."
+        ) from exc
+
+    clip_duration = float(duration or media_duration_seconds(media_video_path) or 3.0)
+    frame_count = max(1, int(math.ceil(clip_duration * fps)))
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    frame_dir = tempfile.mkdtemp(prefix="template_frames_", dir=os.path.dirname(output_path))
+    media_frame_dir = tempfile.mkdtemp(prefix="template_media_frames_", dir=os.path.dirname(output_path))
+    frame_pattern = os.path.join(frame_dir, "frame_%05d.jpg")
+    media_frame_pattern = os.path.join(media_frame_dir, "media_%05d.jpg")
+
+    logger.info(
+        "Rendering HTML template video: template=%s media=%s duration=%.2fs fps=%d -> %s",
+        template_id,
+        media_video_path,
+        clip_duration,
+        fps,
+        output_path,
+    )
+    try:
+        extract_cmd = [
+            ffmpeg,
+            "-y",
+            "-i",
+            media_video_path,
+            "-vf",
+            f"fps={fps}",
+            "-q:v",
+            "2",
+            media_frame_pattern,
+        ]
+        subprocess.run(extract_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        media_frames = sorted(str(path) for path in Path(media_frame_dir).glob("media_*.jpg"))
+        if not media_frames:
+            media_frames = [poster_image_path]
+
+        with sync_playwright() as playwright:
+            browser = _launch_playwright_chromium(playwright)
+            try:
+                page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1)
+                page.set_content(html, wait_until="networkidle", timeout=30000)
+                for frame_index in range(frame_count):
+                    media_frame_uri = _image_data_uri(media_frames[frame_index % len(media_frames)])
+                    page.evaluate(
+                        """async (src) => {
+                            const images = Array.from(document.querySelectorAll('img.template-media'));
+                            await Promise.all(images.map(async (image) => {
+                                image.src = src;
+                                if (image.decode) {
+                                    await image.decode().catch(() => {});
+                                }
+                            }));
+                            await new Promise(resolve => requestAnimationFrame(resolve));
+                        }""",
+                        media_frame_uri,
+                    )
+                    page.screenshot(
+                        path=os.path.join(frame_dir, f"frame_{frame_index + 1:05d}.jpg"),
+                        full_page=False,
+                        type="jpeg",
+                        quality=92,
+                    )
+            finally:
+                browser.close()
+
+        cmd = [
+            ffmpeg,
+            "-y",
+            "-framerate",
+            str(fps),
+            "-i",
+            frame_pattern,
+            "-t",
+            f"{clip_duration:.3f}",
+            "-vf",
+            "format=yuv420p",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "18",
+            "-movflags",
+            "+faststart",
+            output_path,
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    finally:
+        shutil.rmtree(frame_dir, ignore_errors=True)
+        shutil.rmtree(media_frame_dir, ignore_errors=True)
     return output_path
 
 

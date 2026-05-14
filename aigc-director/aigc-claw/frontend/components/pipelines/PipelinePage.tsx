@@ -101,6 +101,47 @@ const TEMPLATE_FIELD_LABELS: Record<string, string> = {
   subtitle: 'subtitle',
 };
 
+const TTS_VOICE_GROUPS: ProviderGroup[] = [
+  {
+    provider: 'zh-cn',
+    label: '普通话',
+    models: [
+      { id: 'zh-CN-XiaoxiaoNeural', label: '晓晓 · 女声' },
+      { id: 'zh-CN-XiaoyiNeural', label: '晓伊 · 女声' },
+      { id: 'zh-CN-YunjianNeural', label: '云健 · 男声', default: true },
+      { id: 'zh-CN-YunxiNeural', label: '云希 · 男声' },
+      { id: 'zh-CN-YunxiaNeural', label: '云夏 · 男声' },
+      { id: 'zh-CN-YunyangNeural', label: '云扬 · 男声' },
+    ],
+  },
+  {
+    provider: 'zh-cn-regional',
+    label: '方言/地区普通话',
+    models: [
+      { id: 'zh-CN-liaoning-XiaobeiNeural', label: '晓北 · 女声 · 东北官话' },
+      { id: 'zh-CN-shaanxi-XiaoniNeural', label: '晓妮 · 女声 · 陕西中原官话' },
+    ],
+  },
+  {
+    provider: 'zh-hk',
+    label: '香港中文/粤语',
+    models: [
+      { id: 'zh-HK-HiuGaaiNeural', label: '晓佳 · 女声 · 粤语' },
+      { id: 'zh-HK-HiuMaanNeural', label: '晓曼 · 女声' },
+      { id: 'zh-HK-WanLungNeural', label: '云龙 · 男声' },
+    ],
+  },
+  {
+    provider: 'zh-tw',
+    label: '台湾中文',
+    models: [
+      { id: 'zh-TW-HsiaoChenNeural', label: '晓臻 · 女声' },
+      { id: 'zh-TW-HsiaoYuNeural', label: '晓雨 · 女声' },
+      { id: 'zh-TW-YunJheNeural', label: '云哲 · 男声' },
+    ],
+  },
+];
+
 const STATUS_STYLE: Record<string, string> = {
   pending: 'bg-gray-100 text-gray-500',
   running: 'bg-blue-50 text-blue-600',
@@ -665,6 +706,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
   const [standardMode, setStandardMode] = useState<'inspiration' | 'copy'>('inspiration');
   const [standardVideoMode, setStandardVideoMode] = useState<'image_concat' | 'dynamic_video'>('image_concat');
   const [templateMode, setTemplateMode] = useState(false);
+  const [templateMediaKind, setTemplateMediaKind] = useState<'image' | 'video'>('image');
   const [templates, setTemplates] = useState<StandardTemplateOption[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [templateFieldValues, setTemplateFieldValues] = useState<Record<string, string>>({});
@@ -711,7 +753,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
       })
       .catch(() => {});
 
-    if (pipeline !== 'standard' || standardVideoMode === 'dynamic_video') {
+    if (pipeline !== 'standard' || standardVideoMode === 'dynamic_video' || (templateMode && templateMediaKind === 'video')) {
       fetchApiModels({ mediaType: 'video', ability: videoAbility, verifiedOnly: true })
         .then(models => {
           const groups = groupApiModels(models, VIDEO_PROVIDERS);
@@ -725,7 +767,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
         })
         .catch(() => {});
     }
-  }, [pipeline, standardVideoMode]);
+  }, [pipeline, standardVideoMode, templateMode, templateMediaKind]);
 
   useEffect(() => {
     if (pipeline !== 'standard') return;
@@ -761,10 +803,18 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
     () => templates.find(item => item.id === selectedTemplateId) || null,
     [templates, selectedTemplateId]
   );
+  const templateVideoEnabled = templateMode && templateMediaKind === 'video';
   const selectedTemplateFields = useMemo(
     () => selectedTemplate?.fields || [],
     [selectedTemplate]
   );
+
+  useEffect(() => {
+    if (!templateMode || templateMediaKind !== 'video') return;
+    if (selectedTemplate && !selectedTemplate.supports_video) {
+      setTemplateMediaKind('image');
+    }
+  }, [templateMode, templateMediaKind, selectedTemplate]);
 
   useEffect(() => {
     if (!templateMode) return;
@@ -790,10 +840,14 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
   };
 
   const canSubmit = useMemo(() => {
-    if (pipeline === 'standard') return text.trim().length > 0 && (!templateMode || Boolean(selectedTemplate));
+    if (pipeline === 'standard') {
+      return text.trim().length > 0
+        && (!templateMode || Boolean(selectedTemplate))
+        && (!templateVideoEnabled || Boolean(selectedTemplate?.supports_video));
+    }
     if (pipeline === 'action_transfer') return promptText.trim() && imagePath.trim() && videoPath.trim();
     return characterImage.trim() && goodsText.trim();
-  }, [pipeline, text, templateMode, selectedTemplate, promptText, imagePath, videoPath, characterImage, goodsText]);
+  }, [pipeline, text, templateMode, selectedTemplate, templateVideoEnabled, promptText, imagePath, videoPath, characterImage, goodsText]);
 
   useEffect(() => {
     if (!task || !['pending', 'running'].includes(task.status)) return;
@@ -858,13 +912,14 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
             subtitle_render_mode: !templateMode && enableSubtitles ? subtitleRenderMode : undefined,
             subtitle_template: templateMode ? selectedTemplate?.id : undefined,
             subtitle_template_fields: templateMode ? templateFieldValues : undefined,
+            template_media_kind: templateMode ? templateMediaKind : undefined,
             tts_voice: ttsVoice,
             tts_speed: ttsSpeed,
             style_control: negativePrompt || undefined,
             segment_count: standardMode === 'inspiration' ? standardSegmentCount : undefined,
             video_mode: templateMode ? 'image_concat' : standardVideoMode,
-            video_model: !templateMode && standardVideoMode === 'dynamic_video' ? videoModel : undefined,
-            video_duration: !templateMode && standardVideoMode === 'dynamic_video' ? duration : undefined,
+            video_model: templateVideoEnabled || (!templateMode && standardVideoMode === 'dynamic_video') ? videoModel : undefined,
+            video_duration: templateVideoEnabled || (!templateMode && standardVideoMode === 'dynamic_video') ? duration : undefined,
           })
         : pipeline === 'action_transfer'
           ? await startActionTransferPipeline({
@@ -990,6 +1045,27 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
                         </div>
                       </div>
                     </div>
+                    <div className="grid h-10 max-w-sm grid-cols-2 rounded-lg bg-gray-100 p-1 text-sm">
+                      {[
+                        { id: 'image', label: '图片拼接', disabled: false },
+                        { id: 'video', label: '动态视频', disabled: Boolean(selectedTemplate && !selectedTemplate.supports_video) },
+                      ].map(item => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          disabled={item.disabled}
+                          title={item.disabled ? '当前模版不支持动态视频' : undefined}
+                          onClick={() => setTemplateMediaKind(item.id as 'image' | 'video')}
+                          className={clsx(
+                            'rounded-md transition-colors',
+                            templateMediaKind === item.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500',
+                            item.disabled && 'cursor-not-allowed opacity-40'
+                          )}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 h-10 rounded-lg bg-gray-100 p-1 text-sm max-w-sm">
@@ -1013,7 +1089,11 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
                     <span>说明</span>
                   </div>
                   <p className="text-sm leading-6 text-yellow-950">
-                    {standardVideoMode === 'image_concat'
+                    {templateMode
+                      ? templateMediaKind === 'video'
+                        ? '精品模版会先按模版媒体位生成图片，再调用视频模型生成动态媒体，最后逐帧渲染 HTML 模版并合成 TTS 音频。'
+                        : '精品模版会按模版媒体位生成图片，再用 HTML 模版精确排版标题、字幕和自定义字段。'
+                      : standardVideoMode === 'image_concat'
                       ? '图片拼接会为每个旁白片段生成一张图片，并配合 TTS 音频合成为静态图文短视频。等待时间主要取决于图片生成速度，通常生成每张图片需 10-20 秒。'
                       : '动态视频会先为每个旁白片段生成图片，再调用视频模型把图片扩展为动态片段，最后合成为完整短片。等待时间更长，通常生成每个视频片段需 1-2 分钟。'}
                   </p>
@@ -1168,7 +1248,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
                   {pipeline !== 'action_transfer' && (
                     <SelectField label="图片模型" value={imageModel} onChange={setImageModel} groups={imageModelGroups} />
                   )}
-                  {(pipeline !== 'standard' || standardVideoMode === 'dynamic_video') && (
+                  {(pipeline !== 'standard' || standardVideoMode === 'dynamic_video' || templateVideoEnabled) && (
                     <SelectField label="视频模型" value={videoModel} onChange={setVideoModel} groups={videoModelGroups} />
                   )}
                   <label className="flex flex-col gap-1.5">
@@ -1177,12 +1257,12 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
                       {VIDEO_RATIOS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
                     </select>
                   </label>
-                  {(pipeline === 'action_transfer' || (pipeline === 'standard' && standardVideoMode === 'dynamic_video')) && (
+                  {(pipeline === 'action_transfer' || (pipeline === 'standard' && (standardVideoMode === 'dynamic_video' || templateVideoEnabled))) && (
                     <NumberField label="视频时长" value={duration} onChange={setDuration} min={1} max={10} />
                   )}
                   {pipeline !== 'action_transfer' && (
                     <>
-                      <TextInput label="TTS 声音" value={ttsVoice} onChange={setTtsVoice} />
+                      <SelectField label="TTS 声音" value={ttsVoice} onChange={setTtsVoice} groups={TTS_VOICE_GROUPS} />
                       <NumberField label="TTS 速度" value={ttsSpeed} onChange={setTtsSpeed} min={0.5} max={2} />
                     </>
                   )}

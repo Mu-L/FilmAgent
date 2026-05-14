@@ -71,15 +71,19 @@ def _template_path(size: str, filename: str) -> str:
 
 
 def _render_preview_html(raw: str) -> str:
+    demo_image = _demo_image_data_uri()
     replacements = {
         **TEMPLATE_FIELD_DEFAULTS,
-        "image": _demo_image_data_uri(),
+        "image": demo_image,
+        "media": f'<img class="template-media" style="width:100%;height:100%;object-fit:cover;display:block;" src="{demo_image}" alt="">',
     }
 
     def repl(match: re.Match) -> str:
         token = match.group(1).strip()
         key = token.split(":", 1)[0].split("=", 1)[0].strip()
         if key in replacements:
+            if key == "media":
+                return replacements[key]
             return replacements[key]
         if "=" in token:
             return escape(token.split("=", 1)[1].strip())

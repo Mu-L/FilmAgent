@@ -95,6 +95,7 @@ export interface StandardTemplateOption {
   media_height: number;
   media_ratio: string;
   media_resolution: string;
+  supports_video?: boolean;
   fields: Array<{ key: string; type: string; default: string }>;
   preview_url: string;
 }

@@ -24,6 +24,7 @@ class StandardPipelineRequest(BaseModel):
     subtitle_render_mode: Literal["postprocess", "image_model"] = "postprocess"
     subtitle_template: Optional[str] = None
     subtitle_template_fields: Optional[Dict[str, str]] = None
+    template_media_kind: Literal["image", "video"] = "image"
     video_duration: int = 5
     tts_voice: str = "zh-CN-YunjianNeural"
     tts_speed: float = 1.2
