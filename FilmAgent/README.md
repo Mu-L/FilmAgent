@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="FilmAgent-pics/cover_page.jpg" width="300" style="margin-bottom: 0.2;"/>
+    <img src="../FilmAgent-pics/cover_page.jpg" width="300" style="margin-bottom: 0.2;"/>
 <p>
 
 <h2 align="center"> <a href="https://github.com/HITsz-TMG/FilmAgent">FilmAgent: A Multi-Agent Framework for End-to-End Film Automation in Virtual 3D Spaces</a></h2>
@@ -38,20 +38,20 @@ _**Zhenran Xu, Longyue Wang, Jifang Wang, Zhouyi Li, Senbao Shi, Xue Yang, Yiyu 
 > This repository also keeps **Video-Claw**, but **FilmAgent is an independent legacy research project** from the lab. It is preserved here for archival and reproducibility purposes only. FilmAgent does not depend on Video-Claw, and Video-Claw does not call FilmAgent.
 >
 > Current local layout:
-> - FilmAgent source code: `FilmAgent/FilmAgent/`
-> - FilmAgent TTS service: `FilmAgent/TTS/`
-> - README images: `FilmAgent-pics/`
+> - FilmAgent source code: `FilmAgent/`
+> - FilmAgent TTS service: `TTS/`
+> - README images: `../FilmAgent-pics/`
 
 **FilmAgent** is a multi-agent collaborative system for end-to-end film automation in 3D virtual spaces. 
 FilmAgent simulates key crew roles—directors, screenwriters, actors, and cinematographers, and integrates efficient human workflows within a sandbox environment.
 
-<div align=center><img src="FilmAgent-pics/intro.png" height="100%" width="78%"/></div>
+<div align=center><img src="../FilmAgent-pics/intro.png" height="100%" width="78%"/></div>
 
 ## 💥 News
 
 - `2025/2/24`: 🚀 We have integrated **DeepSeek**-v3 and r1 for model selection, allowing for more sophisticated decision-making processes.
 - `2025/2/11`: 🎬 We’ve just released a fan-made video about ***NeZha2***, in celebration of its record-breaking success at the box office. Click the image below to watch the video! 👇
-  [<div align=center><img src="FilmAgent-pics/nezha_youtube.png" width="450"></div>](https://www.youtube.com/watch?v=jY3n-AzBtUQ)
+  [<div align=center><img src="../FilmAgent-pics/nezha_youtube.png" width="450"></div>](https://www.youtube.com/watch?v=jY3n-AzBtUQ)
 - `2025/1/23`:  🙌 We're excited that FilmAgent is recommended by [AK](https://x.com/_akhaliq/status/1882268452716728789), [el.cine](https://x.com/EHuanglu/status/1882294685919772928) and [Theoretically Media](https://www.youtube.com/watch?v=0ebXKegfxWk&t=899s). Thanks!
 - `2025/1/22`: 📄 Our paper is now accessible at https://arxiv.org/abs/2501.12909.
 
@@ -61,32 +61,32 @@ FilmAgent simulates key crew roles—directors, screenwriters, actors, and cinem
 
 Following the traditional film studio workflow, we divide the whole film automation process into three sequential stages: idea development, scriptwriting and cinematography, and apply the **Critique-Correct-Verify**, **Debate-Judge** collaboration strategies. After these stages, each line in the script is specified with the positions of the actors, their actions, their dialogue, and the chosen camera shots.
 
-<div align=center><img src="FilmAgent-pics/framework.png" height="100%" width="85%"/></div>
+<div align=center><img src="../FilmAgent-pics/framework.png" height="100%" width="85%"/></div>
 
 ## 🌟 Build Your own Film with FilmAgent
 
-> The following commands assume you are at the root of this repository.
+> The following commands assume you are in this `FilmAgent/` directory.
 
 1. Install Package
 ```Shell
-cd FilmAgent/FilmAgent
+cd FilmAgent
 conda create -n filmagent python==3.9.18
 conda activate filmagent
 pip install -r env.txt
 ```
 
-2. Create `Script` and `Logs` folders under `FilmAgent/FilmAgent/`, then replace the absolute pathname `/path/to/FilmAgent` in `main.py` with the absolute path of `FilmAgent/FilmAgent/` and modify the `topic` in `main.py`. Modify the API keys in `LLMCaller.py`. Run the following commands to get the movie script created by the agents collaboratively:
+2. Create `Script` and `Logs` folders under `FilmAgent/`, then replace the absolute pathname `/path/to/FilmAgent` in `main.py` with the absolute path of this `FilmAgent/` source directory and modify the `topic` in `main.py`. Modify the API keys in `LLMCaller.py`. Run the following commands to get the movie script created by the agents collaboratively:
 ```bash
-cd FilmAgent/FilmAgent
+cd FilmAgent
 conda activate filmagent
 python main.py --model "gpt-4o" # openai
 # python main.py --model "deepseek-chat" ## deepseek-v3
 # python main.py --model "deepseek-reasoner" ## deepseek-r1 Using this model for a multi-agent process will be very slow, you could try using a single-agent process instead. (Refer to step 6)
 ```
 
-3. We use [ChatTTS](https://github.com/2noise/ChatTTS) to provide voice acting for the characters in the script. The TTS-related files are stored in `FilmAgent/TTS/`. Download the ChatTTS model files required by `tts_main.py`, then replace `ROOT = "/Path to/TTS"` in `tts_main.py` with the absolute path of `FilmAgent/TTS/`. Run the following commands to deploy the text-to-speech service:
+3. We use [ChatTTS](https://github.com/2noise/ChatTTS) to provide voice acting for the characters in the script. The TTS-related files are stored in `TTS/`. Download the ChatTTS model files required by `tts_main.py`, then replace `ROOT = "/Path to/TTS"` in `tts_main.py` with the absolute path of `TTS/`. Run the following commands to deploy the text-to-speech service:
 ```bash
-cd FilmAgent/TTS
+cd TTS
 conda create -n tts python==3.9.18
 conda activate tts
 pip install -r env_tts.txt
@@ -95,7 +95,7 @@ python tts_main.py
 
 4. Modify the `Script_path`, `actos_path`, `Audio_path` and `url` in `GenerateAudio.py`. Run the following commands to get the audio files:
 ```bash
-cd FilmAgent/FilmAgent
+cd FilmAgent
 conda activate filmagent
 python GenerateAudio.py
 ```
@@ -105,7 +105,7 @@ python GenerateAudio.py
 > [!IMPORTANT]
 > Please add `"com.unity.nuget.newtonsoft-json": "3.0.2"` inside `Packages/manifest.json` if it throws an error, "*the type or namespace name jobject could not be found.*"
 
-<div align=center><img src="FilmAgent-pics/unity_1.png" height="100%" width="50%"/><img src="FilmAgent-pics/unity_2.png" height="100%" width="50%"/></div>  
+<div align=center><img src="../FilmAgent-pics/unity_1.png" height="100%" width="50%"/><img src="../FilmAgent-pics/unity_2.png" height="100%" width="50%"/></div>  
 
 6. For the tests on 15 topics in our experimental section, we provide three .py files: `test_full.py` (The full FilmAgent framework, utilizing multi-agent collaboration.), `test_no_interation.py` (A single agent is responsible for planning, scriptwriting, and cinematography, representing our FilmAgent framework without multi-agent collaboration algorithms.) and `test_cot.py` (A single agent generates the chain-of-thought rationale and the complete script). Modify the `model` in these `.py` files, you can try different LLMs.
 
@@ -114,7 +114,7 @@ python GenerateAudio.py
 ### 🤝 What does Multi-Agent Collaboration do?
 The following table records some comparisons of the scripts and camera settings **before (⬅️) and after (➡️)** multi-agent collaboration, with excerpts from their discussion process.
 
-<div align=center><img src="FilmAgent-pics/cases.png" height="100%" width="70%"/></div>
+<div align=center><img src="../FilmAgent-pics/cases.png" height="100%" width="70%"/></div>
 
 📌 **Case Highlights:**
 - **Case #1** shows that Director-Screenwriter discussion reduces hallucinations in non-existent actions (e.g., standing suggest), enhances plot coherence, and ensures consistency across scenes.
@@ -124,7 +124,7 @@ The following table records some comparisons of the scripts and camera settings 
 
 ### ⚖️ Comparison with Sora
 
-<div align=center><img src="FilmAgent-pics/sora.png" height="100%" width="70%"/></div>
+<div align=center><img src="../FilmAgent-pics/sora.png" height="100%" width="70%"/></div>
 
 While Sora (🔗 [Video](https://github.com/user-attachments/assets/65bb4c12-cba0-4ee9-a673-63ea5103fd76)) shows great adaptability to diverse locations, characters and shots, it **struggles with consistency and narrative delivery**, along with **strange artifacts**. 
 
