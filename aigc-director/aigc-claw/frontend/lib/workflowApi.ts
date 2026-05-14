@@ -176,7 +176,7 @@ export async function fetchStandardTemplates(): Promise<StandardTemplateOption[]
   return data.templates || [];
 }
 
-export async function uploadPipelineMedia(file: File): Promise<{ filename: string; file_path: string }> {
+export async function uploadMedia(file: File): Promise<{ filename: string; file_path: string }> {
   const formData = new FormData();
   formData.append('file', file);
   const resp = await fetch('/api/upload_media', {

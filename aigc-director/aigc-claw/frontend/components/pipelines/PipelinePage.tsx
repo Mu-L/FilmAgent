@@ -32,7 +32,7 @@ import {
   startDigitalHumanPipeline,
   startStandardPipeline,
   subscribePipelineTask,
-  uploadPipelineMedia,
+  uploadMedia,
   type PipelineTask,
   type PipelineTaskEvent,
   type ApiModelOption,
@@ -228,7 +228,7 @@ function MediaUploadField({
     setUploading(true);
     setError('');
     try {
-      const result = await uploadPipelineMedia(file);
+      const result = await uploadMedia(file);
       setFilename(result.filename);
       onChange(result.file_path);
     } catch (e: any) {
