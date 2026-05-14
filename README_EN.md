@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="aigc-director-pics/banner.png" width="100%" />
+  <img src="video-claw-pics/banner.png" width="100%" />
 </p>
 
 <h2 align="center">
-  AIGC-Claw: AI Creative Video Production Agent
+  Video-Claw: AI Creative Video Production Agent
 </h2>
 
 <p align="center">
@@ -12,14 +12,14 @@
 
 <h4 align="center">
   <img src="https://img.shields.io/badge/Version-1.0.0-blue.svg" alt="Version">
-  <a href="https://github.com/HITsz-TMG/AIGC-Claw/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/HITsz-TMG/AIGC-Claw?style=flat-square" alt="License">
+  <a href="https://github.com/HITsz-TMG/Video-Claw/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/HITsz-TMG/Video-Claw?style=flat-square" alt="License">
   </a>
-  <a href="https://github.com/HITsz-TMG/AIGC-Claw/stargazers">
-    <img src="https://img.shields.io/github/stars/HITsz-TMG/AIGC-Claw?style=flat-square&logo=github" alt="Stars">
+  <a href="https://github.com/HITsz-TMG/Video-Claw/stargazers">
+    <img src="https://img.shields.io/github/stars/HITsz-TMG/Video-Claw?style=flat-square&logo=github" alt="Stars">
   </a>
-  <a href="https://github.com/HITsz-TMG/AIGC-Claw/fork">
-    <img src="https://img.shields.io/github/forks/HITsz-TMG/AIGC-Claw?style=flat-square&logo=github" alt="Forks">
+  <a href="https://github.com/HITsz-TMG/Video-Claw/fork">
+    <img src="https://img.shields.io/github/forks/HITsz-TMG/Video-Claw?style=flat-square&logo=github" alt="Forks">
   </a>
   <img src="https://img.shields.io/badge/Python-3.9+-purple.svg" alt="Python">
   <a href="#method-3-openclaw-auto-setup">
@@ -33,18 +33,18 @@
 
 <div align="center">
 
-📺 [**Bilibili**](https://space.bilibili.com/2031891503?spm_id_from=333.1007.0.0)  ▶️ [**YouTube**](https://www.youtube.com/@imryanxu)  📖 [**Integration Guide**](#method-3-openclaw-auto-setup)  🦀 [**ClawHub**](https://clawhub.ai/hit-cxf/aigc-director)
+📺 [**Bilibili**](https://space.bilibili.com/2031891503?spm_id_from=333.1007.0.0)  ▶️ [**YouTube**](https://www.youtube.com/@imryanxu)  📖 [**Integration Guide**](#method-3-openclaw-auto-setup)  🦀 [**ClawHub**](https://clawhub.ai/hit-cxf/video-claw)
 
-<a href="https://trendshift.io/repositories/24295" target="_blank"><img src="https://trendshift.io/api/badge/repositories/24295" alt="HITsz-TMG%2FAIGC-Claw | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+<a href="https://trendshift.io/repositories/24295" target="_blank"><img src="https://trendshift.io/api/badge/repositories/24295" alt="HITsz-TMG%2FVideo-Claw | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 </div>
 
 
 ## 💥 News
 
-- `2026/3/27`: 🎬 AIGC-Claw was officially released, supporting an automated workflow from idea to finished video.
-- `2026/4/6`: 🎭 AIGC-Claw v2 was released, optimized for short drama generation.
-- `2026/4/9`: ♾️ AIGC-Claw v3 was released, adding infinite continuation and customizable plot development.
+- `2026/3/27`: 🎬 Video-Claw was officially released, supporting an automated workflow from idea to finished video.
+- `2026/4/6`: 🎭 Video-Claw v2 was released, optimized for short drama generation.
+- `2026/4/9`: ♾️ Video-Claw v3 was released, adding infinite continuation and customizable plot development.
 - `2026/4/29`: 🧩 Added three one-shot Pipelines: Artistic Short Video, Action Transfer, and Digital Human Talking Video, together with one-click installation.
 - `2026/5/8`: ⚙️ Added WebUI configuration for API keys and default models, with one-click installation support.
 - `2026/5/13`: 🎞️ Integrated Pixelle-Video HTML templates into the Artistic Short Video Pipeline.
@@ -53,14 +53,14 @@
 ## 📖 Overview
 
 <p align="center">
-  <img src="aigc-director-pics/workflow.png" width="100%" />
+  <img src="video-claw-pics/workflow.png" width="100%" />
 </p>
 
-AIGC-Claw is an AI director system for creative video production. **You only need to provide an idea, a story outline, or even a vague concept. The system will break it down into an executable filmmaking workflow, continuously producing intermediate assets that can be reviewed, confirmed, revised, and delivered, until a complete final video is generated.**
+Video-Claw is an AI director system for creative video production. **You only need to provide an idea, a story outline, or even a vague concept. The system will break it down into an executable filmmaking workflow, continuously producing intermediate assets that can be reviewed, confirmed, revised, and delivered, until a complete final video is generated.**
 
-It is not a one-shot text-to-video tool. It is a full production line covering **script planning -> character and scene design -> storyboard planning -> reference image generation -> video generation -> post-production editing**. Instead of giving you a black-box result, AIGC-Claw behaves like a collaborative AI directing team: each stage informs the next, and every key node is visible, editable, and extensible.
+It is not a one-shot text-to-video tool. It is a full production line covering **script planning -> character and scene design -> storyboard planning -> reference image generation -> video generation -> post-production editing**. Instead of giving you a black-box result, Video-Claw behaves like a collaborative AI directing team: each stage informs the next, and every key node is visible, editable, and extensible.
 
-In addition to the main workflow, AIGC-Claw provides three one-shot Pipelines for lighter and more direct generation tasks: Artistic Short Video, Action Transfer, and Digital Human Talking Video. Pipeline tasks push progress and artifacts in real time, and generated results plus history records are kept locally for review, deletion, and reuse.
+In addition to the main workflow, Video-Claw provides three one-shot Pipelines for lighter and more direct generation tasks: Artistic Short Video, Action Transfer, and Digital Human Talking Video. Pipeline tasks push progress and artifacts in real time, and generated results plus history records are kept locally for review, deletion, and reuse.
 
 ## 🧩 New Pipelines
 
@@ -70,9 +70,9 @@ In addition to the main workflow, AIGC-Claw provides three one-shot Pipelines fo
 | **Action Transfer** | Sidebar: "Action Transfer" | Takes a reference image, an action video, and a prompt, then calls a video model with action-transfer capability to generate the result video. |
 | **Digital Human Talking Video** | Sidebar: "Digital Human Talking Video" | Takes a character image and talking script, generates sentence-level speech and digital human video clips, uses the previous clip's tail frame to continue multi-clip generation, and replaces the final video audio with the generated speech. |
 
-Pipeline metadata is saved under `aigc-director/aigc-claw/backend/code/data/tasks/<task_id>.json`. Images, audio, videos, and text outputs are saved under `aigc-director/aigc-claw/backend/code/result/task/<task_id>/`.
+Pipeline metadata is saved under `video-claw/video-claw/backend/code/data/tasks/<task_id>.json`. Images, audio, videos, and text outputs are saved under `video-claw/video-claw/backend/code/result/task/<task_id>/`.
 
-## 📺 AIGC-Claw Examples
+## 📺 Video-Claw Examples
 ## 🎬 Demo Gallery
 
 ### 🔊 Micro-Drama: deepseek-v4 Shocking Release
@@ -234,9 +234,9 @@ Generated with deepseek-v4 + gpt-image-2 + happy-horse-1.0
 
 | | |
 |:---:|:---:|
-| ![Stage 1](./aigc-director-pics/workflow_demo/stage_1.png) | ![Stage 2](./aigc-director-pics/workflow_demo/stage_2.png) |
-| ![Stage 3](./aigc-director-pics/workflow_demo/stage_3.png) | ![Stage 4](./aigc-director-pics/workflow_demo/stage_4.png) |
-| ![Stage 5](./aigc-director-pics/workflow_demo/stage_5.png) | ![Stage 6](./aigc-director-pics/workflow_demo/stage_6.png) |
+| ![Stage 1](./video-claw-pics/workflow_demo/stage_1.png) | ![Stage 2](./video-claw-pics/workflow_demo/stage_2.png) |
+| ![Stage 3](./video-claw-pics/workflow_demo/stage_3.png) | ![Stage 4](./video-claw-pics/workflow_demo/stage_4.png) |
+| ![Stage 5](./video-claw-pics/workflow_demo/stage_5.png) | ![Stage 6](./video-claw-pics/workflow_demo/stage_6.png) |
 
 </div>
 </details>
@@ -249,7 +249,7 @@ Generated with deepseek-v4 + gpt-image-2 + happy-horse-1.0
 
 | | | | |
 |:---:|:---:|:---:|:---:|
-| ![WeChat 1](./aigc-director-pics/wechat_demo/wechat_1.jpg) | ![WeChat 2](./aigc-director-pics/wechat_demo/wechat_2.jpg) | ![WeChat 3](./aigc-director-pics/wechat_demo/wechat_3.jpg) | ![WeChat 4](./aigc-director-pics/wechat_demo/wechat_4.jpg) |
+| ![WeChat 1](./video-claw-pics/wechat_demo/wechat_1.jpg) | ![WeChat 2](./video-claw-pics/wechat_demo/wechat_2.jpg) | ![WeChat 3](./video-claw-pics/wechat_demo/wechat_3.jpg) | ![WeChat 4](./video-claw-pics/wechat_demo/wechat_4.jpg) |
 
 </div>
 </details>
@@ -262,7 +262,7 @@ Generated with deepseek-v4 + gpt-image-2 + happy-horse-1.0
 
 | | | | |
 |:---:|:---:|:---:|:---:|
-| ![Feishu 1](./aigc-director-pics/feishu_demo/feishu_1.jpg) | ![Feishu 2](./aigc-director-pics/feishu_demo/feishu_2.jpg) | ![Feishu 3](./aigc-director-pics/feishu_demo/feishu_3.jpg) | ![Feishu 4](./aigc-director-pics/feishu_demo/feishu_4.jpg) |
+| ![Feishu 1](./video-claw-pics/feishu_demo/feishu_1.jpg) | ![Feishu 2](./video-claw-pics/feishu_demo/feishu_2.jpg) | ![Feishu 3](./video-claw-pics/feishu_demo/feishu_3.jpg) | ![Feishu 4](./video-claw-pics/feishu_demo/feishu_4.jpg) |
 
 </div>
 </details>
@@ -287,11 +287,11 @@ Generated with deepseek-v4 + gpt-image-2 + happy-horse-1.0
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/HITsz-TMG/AIGC-Claw.git
-cd AIGC-Claw
+git clone https://github.com/HITsz-TMG/Video-Claw.git
+cd Video-Claw
 
 # 2. Enter the app directory and run the installer
-cd aigc-director/aigc-claw
+cd video-claw/video-claw
 chmod +x install.sh
 ./install.sh
 
@@ -303,11 +303,11 @@ Windows users can run the following in PowerShell or CMD:
 
 ```bat
 # 1. Clone the repository
-git clone https://github.com/HITsz-TMG/AIGC-Claw.git
-cd AIGC-Claw
+git clone https://github.com/HITsz-TMG/Video-Claw.git
+cd Video-Claw
 
 # 2. Enter the app directory and run the installer
-cd aigc-director\aigc-claw
+cd video-claw\video-claw
 install.bat
 
 # 3. back to root dir
@@ -318,11 +318,11 @@ The installer checks Python, Node.js, npm, and ffmpeg, installs backend and fron
 
 ```bash
 # Start backend
-cd aigc-director/aigc-claw/backend
+cd video-claw/video-claw/backend
 uv run python api_server.py
 
 # Start frontend in a new terminal
-cd aigc-director/aigc-claw/frontend
+cd video-claw/video-claw/frontend
 npm start
 ```
 
@@ -338,11 +338,11 @@ AIGC_DIRECTOR_SKIP_FRONTEND_BUILD=1 ./install.sh
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/HITsz-TMG/AIGC-Claw.git
-cd AIGC-Claw
+git clone https://github.com/HITsz-TMG/Video-Claw.git
+cd Video-Claw
 
 # 2. Configure and start the backend
-cd aigc-director/aigc-claw/backend
+cd video-claw/video-claw/backend
 
 # Install backend dependencies
 uv sync
@@ -359,7 +359,7 @@ uv run python api_server.py
 
 ```bash
 # 3. Configure and start the frontend in a new terminal
-cd aigc-director/aigc-claw/frontend
+cd video-claw/video-claw/frontend
 npm install
 npm run build
 npm start
@@ -373,14 +373,14 @@ If `uv` is not installed, you can also create a Python virtual environment manua
 Send this message to OpenClaw:
 
 ```text
-Please clone this git repository: https://github.com/HITsz-TMG/AIGC-Claw.git
-Then recursively copy the aigc-director folder inside AIGC-Claw to .openclaw/workspace/skills and use it as an AIGC-related skill.
+Please clone this git repository: https://github.com/HITsz-TMG/Video-Claw.git
+Then recursively copy the video-claw folder inside Video-Claw to .openclaw/workspace/skills and use it as an AIGC-related skill.
 ```
 
-When using it, it is recommended to explicitly say "use aigc-director":
+When using it, it is recommended to explicitly say "use video-claw":
 
 ```text
-Use aigc-director to generate a video with the content "A Dog's Purpose".
+Use video-claw to generate a video with the content "A Dog's Purpose".
 ```
 
 ### Method 4: Install via ClawHub
@@ -390,14 +390,14 @@ Make sure `clawhub-cli` is installed locally.
 Open a terminal and run the following command. Choose `yes` for every prompt.
 
 ```bash
-clawhub install aigc-director
+clawhub install video-claw
 ```
 
-After installation, ClawHub will copy `aigc-director` into `workspace/skills` or your specified skills directory.
+After installation, ClawHub will copy `video-claw` into `workspace/skills` or your specified skills directory.
 
 Then you can follow Method 1 for one-click installation or Method 2 for manual setup, or let OpenClaw build and run the project for you.
 
-The first time you use `aigc-director`, if the project has not been built manually, OpenClaw will automatically build and start both the backend and frontend. This may take some time because setup involves dependency installation and compilation.
+The first time you use `video-claw`, if the project has not been built manually, OpenClaw will automatically build and start both the backend and frontend. This may take some time because setup involves dependency installation and compilation.
 
 ---
 
@@ -414,7 +414,7 @@ The first time you use `aigc-director`, if the project has not been built manual
 
 ### Backend Configuration
 
-Backend configuration is stored in `aigc-claw/backend/config.yaml` using a lowercase hierarchical YAML structure. You can edit this file directly, or open the frontend "Settings" page from the bottom of the sidebar.
+Backend configuration is stored in `video-claw/backend/config.yaml` using a lowercase hierarchical YAML structure. You can edit this file directly, or open the frontend "Settings" page from the bottom of the sidebar.
 
 - `api_providers` stores API keys, base URLs, and proxy toggles for each model provider.
 - `models` stores default models for the **main workflow** home page. When creating a project, the frontend reads these defaults first and sends the concrete model parameters to the backend. The backend no longer silently chooses fallback models for the main workflow; missing model parameters will return an error.
@@ -430,7 +430,7 @@ After starting both the backend and frontend, open the "Settings" page from the 
 - Saving writes the values back to `backend/config.yaml`. API keys, proxy settings, and default models are read by newly created projects; service startup fields such as `server.host` and `server.port` require restarting the backend to fully take effect.
 
 ```yaml
-project_name: AIGC-Claw
+project_name: Video-Claw
 
 server:
   host: 127.0.0.1
@@ -501,23 +501,23 @@ You only need to fill in the provider keys required by the models you choose. Fo
 | **Image-to-Image** | wan2.7-image, wan2.7-image-pro, doubao-seedream-5.0/4.5/4.0, gpt-image-2 |
 | **Video Generation** | wan2.7-i2v, wan2.6-i2v-flash, doubao-seedance-2.0 (Normal/Fast), kling-v3/v2.6/v2.5 |
 
-Model information is defined in `aigc-director/aigc-claw/backend/models/config_model.py`. The frontend and Pipeline APIs filter models by capability tags, such as text generation, image generation, image-to-video, action transfer, and TTS.
+Model information is defined in `video-claw/video-claw/backend/models/config_model.py`. The frontend and Pipeline APIs filter models by capability tags, such as text generation, image generation, image-to-video, action transfer, and TTS.
 
 </details>
 
 
 ## 🙏 Acknowledgments
 
-The idea and design of AIGC-Claw were inspired by [AutoResearchClaw](https://github.com/aiming-lab/AutoResearchClaw), [huobao-drama](https://github.com/chatfire-AI/huobao-drama), [LibTV](https://www.liblib.tv/), and [libtv-skills](https://github.com/libtv-labs/libtv-skills).
+The idea and design of Video-Claw were inspired by [AutoResearchClaw](https://github.com/aiming-lab/AutoResearchClaw), [huobao-drama](https://github.com/chatfire-AI/huobao-drama), [LibTV](https://www.liblib.tv/), and [libtv-skills](https://github.com/libtv-labs/libtv-skills).
 
-Pixelle-Video: AIGC-Claw draws on its Artistic Short Video, Action Transfer, and Digital Human Talking Video Pipelines, as well as its HTML template approach for precise text control in images and videos.
+Pixelle-Video: Video-Claw draws on its Artistic Short Video, Action Transfer, and Digital Human Talking Video Pipelines, as well as its HTML template approach for precise text control in images and videos.
 
 
 ## 📚 Related Work
 
 | Framework | Paper Information |
 |:---:|---|
-| <img src="https://github.com/HITsz-TMG/FilmAgent/blob/main/pics/framework.png?raw=true" width="420" alt="FilmAgent framework"/> | **[SIGGRAPH Asia 2024] FilmAgent: Automating Virtual Film Production Through a Multi-Agent Collaborative Framework**<br>*Zhenran Xu, Jifang Wang, Longyue Wang, Zhouyi Li, Senbao Shi, Baotian Hu, Min Zhang*<br>[[Paper](https://doi.org/10.1145/3681758.3698014)] [[GitHub](https://github.com/HITsz-TMG/AIGC-Claw/blob/main/FilmAgent.md)] |
+| <img src="https://github.com/HITsz-TMG/FilmAgent/blob/main/pics/framework.png?raw=true" width="420" alt="FilmAgent framework"/> | **[SIGGRAPH Asia 2024] FilmAgent: Automating Virtual Film Production Through a Multi-Agent Collaborative Framework**<br>*Zhenran Xu, Jifang Wang, Longyue Wang, Zhouyi Li, Senbao Shi, Baotian Hu, Min Zhang*<br>[[Paper](https://doi.org/10.1145/3681758.3698014)] [[GitHub](https://github.com/HITsz-TMG/Video-Claw/blob/main/FilmAgent.md)] |
 | <img src="https://github.com/HITsz-TMG/Anim-Director/blob/main/Anim-Director/assets/visualeg.png" width="420" alt="Anim-Director result"/> | **[SIGGRAPH Asia 2024] Anim-Director: A Large Multimodal Model Powered Agent for Controllable Animation Video Generation**<br>*Yunxin Li, Haoyuan Shi, Baotian Hu, Longyue Wang, Jiashun Zhu, Jinyi Xu, Zhen Zhao, Min Zhang*<br>[[Paper](https://doi.org/10.1145/3680528.3687688)] [[GitHub](https://github.com/HITsz-TMG/Anim-Director/tree/main/Anim-Director)] |
 | <img src="https://raw.githubusercontent.com/HITsz-TMG/Anim-Director/main/AniMaker/assets/pipeline.png" width="420" alt="AniMaker pipeline"/> | **[SIGGRAPH Asia 2025] AniMaker: Multi-Agent Animated Storytelling with MCTS-Driven Clip Generation**<br>*Haoyuan Shi, Yunxin Li, Xinyu Chen, Longyue Wang, Baotian Hu, Min Zhang*<br>[[Paper](https://doi.org/10.1145/3757377.3764009)] [[GitHub](https://github.com/HITsz-TMG/Anim-Director/tree/main/AniMaker)] |
 
