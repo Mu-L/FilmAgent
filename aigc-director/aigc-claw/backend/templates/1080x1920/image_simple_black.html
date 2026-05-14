@@ -50,6 +50,7 @@
             height: 40%;
             z-index: 2;
             padding: 0 0; /* 无左右内边距 */
+            overflow: hidden;
         }
 
         /* Footer */
@@ -128,7 +129,7 @@
 </head>
 <body>
     <div class="title">{{title}}</div>
-    <image src="{{image}}" class="image-center" />
+    <div class="image-center">{{media}}</div>
     <div class="footer">
         <div class="author">
             <div class="author-name">

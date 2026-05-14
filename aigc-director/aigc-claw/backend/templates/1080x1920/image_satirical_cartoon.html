@@ -28,16 +28,23 @@
             position: relative;
             width: 100%;
             height: 100%;
-            background-image: url("{{image}}");
-            background-size: cover;
-            background-position: center;
             z-index: 0;
             display: flex;
             justify-content: center;
             align-items: center;
+            overflow: hidden;
+        }
+
+        .media-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
         }
 
         .title {
+            position: relative;
+            z-index: 1;
             width: 900px;
             text-align: center;
             font-size: 92px;
@@ -131,6 +138,7 @@
 </head>
 <body>
     <div class="bg">
+        <div class="media-bg">{{media}}</div>
         <div class="title">{{title}}</div>
     </div>
     <div class="footer">

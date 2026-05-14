@@ -56,6 +56,7 @@
             height: 40%;
             z-index: 2;
             padding: 0 0; /* 无左右内边距 */
+            overflow: hidden;
         }
 
         /* Footer */
@@ -136,7 +137,7 @@
     <div class="title-wrapper">
         <span class="title">{{text}}</span>
     </div>
-    <image src="{{image}}" class="image-center" />
+    <div class="image-center">{{media}}</div>
     <div class="footer">
         <div class="author">
             <div class="author-name">

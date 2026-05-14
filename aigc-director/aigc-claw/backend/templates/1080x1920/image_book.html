@@ -21,9 +21,15 @@
             color: #fff;
             position: relative;
             background: #1a1a1a;
-            background-image: url("{{image}}");
-            background-size: cover;
-            background-position: center bottom 400px;
+        }
+
+        .media-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+            transform: translateY(-400px);
+            height: calc(100% + 400px);
         }
 
         /* 顶部区域 */
@@ -34,6 +40,7 @@
             transform: translateX(-50%);
             text-align: center;
             width: 90%;
+            z-index: 1;
         }
 
         .image {
@@ -77,6 +84,7 @@
             transform: translateX(-50%);
             text-align: center;
             width: 90%;
+            z-index: 1;
         }
 
         .main-text {
@@ -102,6 +110,8 @@
     </style>
 </head>
 <body>
+    <div class="media-bg">{{media}}</div>
+
     <!-- 顶部标题区 -->
     <div class="top-section">
         <div class="title">{{title}}</div>

@@ -32,11 +32,15 @@
             color: #2a2a2a;
             position: relative;
             background: #e8e5e0;
-            background-image: url("{{image}}");
-            background-size: cover;
-            background-position: center;
             display: flex;
             flex-direction: column;
+        }
+
+        .media-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
         }
 
         /* 背景遮罩层 */
@@ -128,6 +132,8 @@
 </head>
 
 <body>
+    <div class="media-bg">{{media}}</div>
+
     <div class="title">
         <div class="title-content">{{title}}</div>
     </div>

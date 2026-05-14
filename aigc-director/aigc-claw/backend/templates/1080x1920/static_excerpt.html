@@ -37,6 +37,13 @@
             padding: 80px 100px;
         }
 
+        .media-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+        }
+
         /* 背景遮罩层 */
         body::before {
             content: '';
@@ -111,6 +118,8 @@
 </head>
 
 <body>
+    <div class="media-bg">{{media}}</div>
+
     <!-- 顶部标题 -->
     <div class="header">
         <div class="title">{{title}}</div>
