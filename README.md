@@ -286,6 +286,8 @@ Pipeline 任务元数据保存在 `aigc-director/aigc-claw/backend/code/data/tas
 
 ### 方式一：一键安装（推荐）
 
+**Linux / MacOS 安装**：
+
 ```bash
 # 1. 克隆项目
 git clone https://github.com/HITsz-TMG/AIGC-Claw.git
@@ -295,13 +297,24 @@ cd AIGC-Claw
 cd aigc-director/aigc-claw
 chmod +x install.sh
 ./install.sh
+
+# 3. 返回项目根目录
+cd ../..
 ```
 
-Windows 用户可在 PowerShell 或 CMD 中执行：
+**Windows 安装**：
 
 ```bat
-cd AIGC-Claw\aigc-director\aigc-claw
+# 1. 克隆项目
+git clone https://github.com/HITsz-TMG/AIGC-Claw.git
+cd AIGC-Claw
+
+# 2. 进入应用目录并执行安装脚本
+cd aigc-director\aigc-claw
 install.bat
+
+# 3. 返回项目根目录
+cd ../..
 ```
 
 安装脚本会检查 Python、Node.js、npm 和 ffmpeg，安装后端与前端依赖，复制 `backend/config.yaml.example` 为 `backend/config.yaml`，并执行前端构建。安装完成后，先在 `backend/config.yaml` 中填入模型服务 API Key，并确认 `models` 中的主流程默认模型；也可以启动前端后通过侧边栏底部「设置」页面修改这些配置。配置完成后启动服务：
