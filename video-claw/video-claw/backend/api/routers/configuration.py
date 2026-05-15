@@ -3,6 +3,7 @@ from typing import Any, Dict
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from api.logging_config import apply_access_log_setting
 from config import Config, CONFIG_PATH
 
 router = APIRouter(tags=["Configuration"])
@@ -22,7 +23,9 @@ async def get_config():
 
 @router.put("/api/config")
 async def update_config(req: ConfigUpdateRequest):
+    config = Config.update_config(req.values)
+    apply_access_log_setting()
     return {
-        "config": Config.update_config(req.values),
+        "config": config,
         "path": str(CONFIG_PATH),
     }

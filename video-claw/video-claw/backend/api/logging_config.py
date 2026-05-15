@@ -7,6 +7,11 @@ from config import Config
 _listener = None
 
 
+def apply_access_log_setting():
+    """Apply the runtime access-log switch for uvicorn request logs."""
+    logging.getLogger("uvicorn.access").disabled = not Config.ACCESS_LOG
+
+
 class AIGCFormatter(logging.Formatter):
     """Custom log formatter that adds level icons for better readability."""
 
@@ -54,6 +59,7 @@ def setup_concurrent_logging():
         logger.handlers.clear()
         logger.propagate = True
         logger.setLevel(logging.WARNING if name == "httpx" else level)
+    apply_access_log_setting()
 
     _listener = listener
     return listener

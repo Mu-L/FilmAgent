@@ -3,6 +3,7 @@ server:
   host: 127.0.0.1
   port: 8000
   debug: false
+  access_log: false
 api_providers:
   common:
     print_model_input: false

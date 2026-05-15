@@ -18,6 +18,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "host": "127.0.0.1",
         "port": 8000,
         "debug": False,
+        "access_log": False,
     },
     "api_providers": {
         "common": {
@@ -98,6 +99,7 @@ def _coerce_config(data: Dict[str, Any]) -> Dict[str, Any]:
     except (TypeError, ValueError):
         server["port"] = DEFAULT_CONFIG["server"]["port"]
     server["debug"] = _as_bool(server.get("debug"))
+    server["access_log"] = _as_bool(server.get("access_log"))
     server.pop("admin_password", None)
 
     common = clean["api_providers"]["common"]
@@ -166,6 +168,7 @@ class Config:
     HOST = _get(CONFIG, "server.host")
     PORT = _get(CONFIG, "server.port")
     DEBUG = _get(CONFIG, "server.debug")
+    ACCESS_LOG = _get(CONFIG, "server.access_log")
 
     PRINT_MODEL_INPUT = _get(CONFIG, "api_providers.common.print_model_input")
     PROXY = _get(CONFIG, "api_providers.common.proxy")
@@ -234,6 +237,7 @@ class Config:
         cls.HOST = _get(clean, "server.host")
         cls.PORT = _get(clean, "server.port")
         cls.DEBUG = _get(clean, "server.debug")
+        cls.ACCESS_LOG = _get(clean, "server.access_log")
 
         cls.PRINT_MODEL_INPUT = _get(clean, "api_providers.common.print_model_input")
         cls.PROXY = _get(clean, "api_providers.common.proxy")

@@ -39,6 +39,7 @@ const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
       { path: 'server.host', label: 'host' },
       { path: 'server.port', label: 'port', type: 'number' },
       { path: 'server.debug', label: 'debug', type: 'boolean' },
+      { path: 'server.access_log', label: 'access_log', type: 'boolean' },
     ],
   },
   {

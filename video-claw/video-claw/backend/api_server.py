@@ -17,7 +17,7 @@ from config import settings
 
 
 def main():
-    uvicorn.run(app, host=settings.HOST, port=settings.PORT)
+    uvicorn.run(app, host=settings.HOST, port=settings.PORT, access_log=settings.ACCESS_LOG)
 
 
 if __name__ == "__main__":
