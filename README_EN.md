@@ -304,8 +304,8 @@ Windows users can run the following in PowerShell or CMD:
 
 ```bat
 # 1. Clone the repository
-git clone https://github.com/HITsz-TMG/Video-Claw.git
-cd Video-Claw
+git clone https://github.com/HITsz-TMG/AIGC-Claw.git
+cd AIGC-Claw
 
 # 2. Enter the app directory and run the installer
 cd video-claw\video-claw
