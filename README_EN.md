@@ -288,8 +288,8 @@ Generated with deepseek-v4 + gpt-image-2 + happy-horse-1.0
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/HITsz-TMG/Video-Claw.git
-cd Video-Claw
+git clone https://github.com/HITsz-TMG/AIGC-Claw.git
+cd AIGC-Claw
 
 # 2. Enter the app directory and run the installer
 cd video-claw/video-claw

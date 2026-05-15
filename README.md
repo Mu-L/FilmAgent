@@ -307,8 +307,8 @@ cd ../..
 
 ```bat
 # 1. 克隆项目
-git clone https://github.com/HITsz-TMG/Video-Claw.git
-cd Video-Claw
+git clone https://github.com/HITsz-TMG/AIGC-Claw.git
+cd AIGC-Claw
 
 # 2. 进入应用目录并执行安装脚本
 cd video-claw\video-claw
