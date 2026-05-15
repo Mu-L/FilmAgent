@@ -66,10 +66,10 @@ Video-Claw 是一个面向创意视频生产的 AI 导演系统。**你只需要
 ## 🧩 快速创作 Pipeline
 
 | Pipeline | 示意图 | 前端入口 | 说明 |
-|---|---:|---|---|
-| **文艺短视频** | <img src="./video-claw-pics/pipeline_demo/standard.png" width="400" /> | 侧边栏「文艺短视频」 | 支持「图片拼接 / 动态视频」和「创作灵感 / 完整文案」两组模式。系统按句号切分旁白，为每个片段生成配图与语音；图片拼接模式合成图文短视频，动态视频模式继续调用图生视频模型生成片段；可选添加标题和字幕。 |
-| **动作迁移** | <img src="./video-claw-pics/pipeline_demo/action_transfer.png" width="400" /> | 侧边栏「动作迁移」 | 输入参考图片、动作视频和提示词，调用支持动作迁移能力的视频模型生成结果视频。 |
-| **数字人口播** | <img src="./video-claw-pics/pipeline_demo/digital_human.png" width="400" /> | 侧边栏「数字人口播」 | 输入人物图和口播文案，生成分句语音与数字人视频片段；多片段生成时会使用上一段尾帧衔接下一段，并用生成语音替换最终视频音轨。 |
+|---|---|---|---|
+| <div style="white-space:nowrap"><b>文艺短视频</b></div> | <img src="./video-claw-pics/pipeline_demo/standard.png" width="600" /> | 侧边栏「文艺短视频」 | 支持「图片拼接 / 动态视频」和「创作灵感 / 完整文案」两组模式。系统按句号切分旁白，为每个片段生成配图与语音；图片拼接模式合成图文短视频，动态视频模式继续调用图生视频模型生成片段；可选添加标题和字幕。 |
+| <div style="white-space:nowrap"><b>动作迁移</b></div> | <img src="./video-claw-pics/pipeline_demo/action_transfer.png" width="600" /> | 侧边栏「动作迁移」 | 输入参考图片、动作视频和提示词，调用支持动作迁移能力的视频模型生成结果视频。 |
+| <div style="white-space:nowrap"><b>数字人口播</b></div> | <img src="./video-claw-pics/pipeline_demo/digital_human.png" width="600" /> | 侧边栏「数字人口播」 | 输入人物图和口播文案，生成分句语音与数字人视频片段；多片段生成时会使用上一段尾帧衔接下一段，并用生成语音替换最终视频音轨。 |
 
 Pipeline 任务元数据保存在 `video-claw/video-claw/backend/code/data/tasks/<task_id>.json`，图片、音频、视频等产物保存在 `video-claw/video-claw/backend/code/result/task/<task_id>/`。
 

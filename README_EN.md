@@ -66,10 +66,10 @@ In addition to the main workflow, Video-Claw provides three one-shot Pipelines f
 ## 🧩 Quick Creation Pipelines
 
 | Pipeline | Demo | Frontend Entry | Description |
-|---|---:|---|---|
-| **Artistic Short Video** | <img src="./video-claw-pics/pipeline_demo/standard.png" width="400" /> | Sidebar: "Artistic Short Video" | Supports both "Image Montage / Dynamic Video" and "Creative Inspiration / Full Script" modes. The system splits narration by periods, generates an image and voiceover for each segment, then either composes image-based clips or calls an image-to-video model for dynamic segments. Optional title and subtitles are supported. |
-| **Action Transfer** | <img src="./video-claw-pics/pipeline_demo/action_transfer.png" width="400" /> | Sidebar: "Action Transfer" | Takes a reference image, an action video, and a prompt, then calls a video model with action-transfer capability to generate the result video. |
-| **Digital Human Talking Video** | <img src="./video-claw-pics/pipeline_demo/digital_human.png" width="400" /> | Sidebar: "Digital Human Talking Video" | Takes a character image and talking script, generates sentence-level speech and digital human video clips, uses the previous clip's tail frame to continue multi-clip generation, and replaces the final video audio with the generated speech. |
+|---|---|---|---|
+| <div style="white-space:nowrap"><b>Artistic Short Video</b></div> | <img src="./video-claw-pics/pipeline_demo/standard.png" width="600" /> | Sidebar: "Artistic Short Video" | Supports both "Image Montage / Dynamic Video" and "Creative Inspiration / Full Script" modes. The system splits narration by periods, generates an image and voiceover for each segment, then either composes image-based clips or calls an image-to-video model for dynamic segments. Optional title and subtitles are supported. |
+| <div style="white-space:nowrap"><b>Action Transfer</b></div> | <img src="./video-claw-pics/pipeline_demo/action_transfer.png" width="600" /> | Sidebar: "Action Transfer" | Takes a reference image, an action video, and a prompt, then calls a video model with action-transfer capability to generate the result video. |
+| <div style="white-space:nowrap"><b>Digital Human Talking Video</b></div> | <img src="./video-claw-pics/pipeline_demo/digital_human.png" width="600" /> | Sidebar: "Digital Human Talking Video" | Takes a character image and talking script, generates sentence-level speech and digital human video clips, uses the previous clip's tail frame to continue multi-clip generation, and replaces the final video audio with the generated speech. |
 
 Pipeline metadata is saved under `video-claw/video-claw/backend/code/data/tasks/<task_id>.json`. Images, audio, videos, and text outputs are saved under `video-claw/video-claw/backend/code/result/task/<task_id>/`.
 
