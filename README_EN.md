@@ -12,14 +12,14 @@
 
 <h4 align="center">
   <img src="https://img.shields.io/badge/Version-1.0.0-blue.svg" alt="Version">
-  <a href="https://github.com/HITsz-TMG/Video-Claw/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/HITsz-TMG/Video-Claw?style=flat-square" alt="License">
+  <a href="https://github.com/HITsz-TMG/VideoClaw/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/HITsz-TMG/VideoClaw?style=flat-square" alt="License">
   </a>
-  <a href="https://github.com/HITsz-TMG/Video-Claw/stargazers">
-    <img src="https://img.shields.io/github/stars/HITsz-TMG/Video-Claw?style=flat-square&logo=github" alt="Stars">
+  <a href="https://github.com/HITsz-TMG/VideoClaw/stargazers">
+    <img src="https://img.shields.io/github/stars/HITsz-TMG/VideoClaw?style=flat-square&logo=github" alt="Stars">
   </a>
-  <a href="https://github.com/HITsz-TMG/Video-Claw/fork">
-    <img src="https://img.shields.io/github/forks/HITsz-TMG/Video-Claw?style=flat-square&logo=github" alt="Forks">
+  <a href="https://github.com/HITsz-TMG/VideoClaw/fork">
+    <img src="https://img.shields.io/github/forks/HITsz-TMG/VideoClaw?style=flat-square&logo=github" alt="Forks">
   </a>
   <img src="https://img.shields.io/badge/Python-3.9+-purple.svg" alt="Python">
   <a href="#method-3-openclaw-auto-setup">
@@ -288,8 +288,8 @@ Generated with deepseek-v4 + gpt-image-2 + happy-horse-1.0
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/HITsz-TMG/AIGC-Claw.git
-cd AIGC-Claw
+git clone https://github.com/HITsz-TMG/VideoClaw.git
+cd VideoClaw
 
 # 2. Enter the app directory and run the installer
 cd video-claw/video-claw
@@ -304,8 +304,8 @@ Windows users can run the following in PowerShell or CMD:
 
 ```bat
 # 1. Clone the repository
-git clone https://github.com/HITsz-TMG/AIGC-Claw.git
-cd AIGC-Claw
+git clone https://github.com/HITsz-TMG/VideoClaw.git
+cd VideoClaw
 
 # 2. Enter the app directory and run the installer
 cd video-claw\video-claw
