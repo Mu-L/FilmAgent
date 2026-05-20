@@ -67,15 +67,20 @@ In addition to the main workflow, Video-Claw provides three one-shot Pipelines f
 
 ## 🎬 VideoClaw
 
+<details>
+<summary><b>Click to view WebUI UI design</b></summary>
+
 | Stage | Demo | Description |
 |---|---|---|
-| Home | <img src="video-claw-pics/workflow_demo/homepage.png" width="600" /> | Project overview and entry |
-| Script Planning | <img src="video-claw-pics/workflow_demo/stage-1.png" width="600" /> | Structured script and storyboard generation |
-| Character/Scene Design | <img src="video-claw-pics/workflow_demo/stage-2.png" width="600" /> | Character and scene style design |
-| Storyboard Planning | <img src="video-claw-pics/workflow_demo/stage-3.png" width="600" /> | Determining shots and cinematic language |
-| Reference Image Generation | <img src="video-claw-pics/workflow_demo/stage-4.png" width="600" /> | Generating reference images and stylistic references |
-| Video Generation | <img src="video-claw-pics/workflow_demo/stage-5.png" width="600" /> | Generating short clips and action transfer |
-| Final Editing | <img src="video-claw-pics/workflow_demo/stage-6.png" width="600" /> | Composition, dubbing, and final export |
+| Home | <img src="video-claw-pics/workflow_demo/homepage.png" width="600" /> | System overview, supporting project history, creation of new projects, and global settings (API Keys and default models). |
+| Script Planning | <img src="video-claw-pics/workflow_demo/stage-1.png" width="600" /> | Enter ideas or outlines to automatically generate structured multi-scene scripts (including narration and dialogue), supporting intelligent plot continuation. |
+| Character/Scene Design | <img src="video-claw-pics/workflow_demo/stage-2.png" width="600" /> | Automatically extract key characteristics of roles and settings from the script to generate consistent style reference art. |
+| Storyboard Planning | <img src="video-claw-pics/workflow_demo/stage-3.png" width="600" /> | Break down each scene into consecutive visual shots, detailing camera angles, action descriptions, and reference content. |
+| Reference Image Generation | <img src="video-claw-pics/workflow_demo/stage-4.png" width="600" /> | Generate high-quality reference images for each shot to precisely control lighting and composition as a key visual benchmark for video generation. |
+| Video Generation | <img src="video-claw-pics/workflow_demo/stage-5.png" width="600" /> | Utilize state-of-the-art video models (e.g., Wan, Kling) to convert shots into dynamic clips, with support for action transfer from external videos. |
+| Final Editing | <img src="video-claw-pics/workflow_demo/stage-6.png" width="600" /> | Automatically aggregate all generated video clips, render TTS voiceovers, add background music and subtitles, and export the final publishable video. |
+
+</details>
 
 ### 🔊 Micro-Drama: deepseek-v4 Shocking Release
 Generated with deepseek-v4 + gpt-image-2 + happy-horse-1.0
@@ -256,11 +261,16 @@ Generated with deepseek-v4 + gpt-image-2 + happy-horse-1.0
 
 ## 🧩 Quick Creation Pipelines
 
+<details>
+<summary><b>Click to view WebUI UI design</b></summary>
+
 | Pipeline | Demo | Frontend Entry | Description |
 |---|---|---|---|
 | <div style="white-space:nowrap"><b>Artistic Short Video</b></div> | <img src="video-claw-pics/pipeline_demo/standard.png" width="600" /> | Sidebar: "Artistic Short Video" | Supports both "Image Montage / Dynamic Video" and "Creative Inspiration / Full Script" modes. The system splits narration by periods, generates an image and voiceover for each segment, then either composes image-based clips or calls an image-to-video model for dynamic segments. Optional title and subtitles are supported. |
 | <div style="white-space:nowrap"><b>Action Transfer</b></div> | <img src="video-claw-pics/pipeline_demo/action_transfer.png" width="600" /> | Sidebar: "Action Transfer" | Takes a reference image, an action video, and a prompt, then calls a video model with action-transfer capability to generate the result video. |
 | <div style="white-space:nowrap"><b>Digital Human Talking Video</b></div> | <img src="video-claw-pics/pipeline_demo/digital_human.png" width="600" /> | Sidebar: "Digital Human Talking Video" | Takes a character image and talking script, generates sentence-level speech and digital human video clips, uses the previous clip's tail frame to continue multi-clip generation, and replaces the final video audio with the generated speech. |
+
+</details>
 
 ### Artistic Short Video
 
