@@ -88,10 +88,10 @@ class LLM:
                 proxy=Config.provider_proxy("openai"),
             )
             result = client.query(prompt, image_urls=image_urls, model=model, web_search=web_search)
-        elif "kimi" in model_lower or "qwen3.6-plus" in model_lower or "qwen3.6-flash" in model_lower:
+        elif "kimi" in model_lower or "qwen3.6-plus" in model_lower or "qwen3.6-flash" in model_lower or "vl" in model_lower:
             # DashScope VLM models (using MultiModalConversation API)
             dashscope_vl_client = QwenVLClient(api_key=self.dashscope_api_key)
-            result = dashscope_vl_client.chat(text=prompt, images=[], model=model, stream=False)
+            result = dashscope_vl_client.chat(text=prompt, images=image_urls, model=model, stream=False)
         elif "deepseek-v3.2" in model_lower:
             # DeepSeek v3.2 (通过 DashScope Generation API)
             client = QwenLLM(api_key=self.dashscope_api_key)

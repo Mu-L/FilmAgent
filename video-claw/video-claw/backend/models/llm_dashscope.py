@@ -45,13 +45,14 @@ class QwenLLM:
 
         if dashscope:
             dashscope.api_key = self.api_key
-            if self.base_url:
-                dashscope.base_http_api_url = self.base_url
+            # Do not override base_url to avoid "url error" if config contains wrong path
+            # if self.base_url:
+            #     dashscope.base_http_api_url = self.base_url
 
         self.max_attempts = 3
         self.max_tokens = 8000
 
-    def query(self, prompt: str, image_urls: list = None, model: str = "qwen3.5-vl", web_search: bool = False):
+    def query(self, prompt: str, image_urls: list = None, model: str = "qwen-max", web_search: bool = False):
         """
         Query Qwen model for text generation.
         Note: This is for text-only LLM use. For image+text, use VLM client.
@@ -64,8 +65,15 @@ class QwenLLM:
         if dashscope is None:
             raise RuntimeError("dashscope package not installed. Run: pip install dashscope")
 
-        if not model:
-            model = "qwen3.5-plus"
+        if not model or "qwen3.5" in model:
+            # 兼容处理遗留的 qwen3.5 传参，避免 url error
+            if "max" in model:
+                model = "qwen-max"
+            elif "turbo" in model:
+                model = "qwen-turbo"
+            else:
+                model = "qwen-plus"
+
 
         messages = [{"role": "system", "content": "You are a helpful assistant."}]
         messages.append({"role": "user", "content": prompt})
