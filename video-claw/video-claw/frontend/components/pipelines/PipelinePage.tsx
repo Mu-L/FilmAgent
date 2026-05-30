@@ -45,6 +45,7 @@ import {
   T2I_PROVIDERS,
   VIDEO_PROVIDERS,
   VIDEO_RATIOS,
+  VIDEO_RESOLUTIONS,
   type ProviderGroup,
 } from '@/config/models';
 import BrandHeader from '@/components/BrandHeader';
@@ -730,6 +731,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
     pipeline === 'action_transfer' ? 'wan2.7-videoedit' : pipeline === 'digital_human' ? 'wan2.7-r2v' : DEFAULTS.video
   );
   const [ratio, setRatio] = useState('9:16');
+  const [videoResolution, setVideoResolution] = useState('720P');
   const [duration, setDuration] = useState(5);
   const [ttsVoice, setTtsVoice] = useState('zh-CN-YunjianNeural');
   const [ttsSpeed, setTtsSpeed] = useState(1.2);
@@ -912,6 +914,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
       const common = {
         video_model: videoModel,
         video_ratio: ratio,
+        video_resolution: videoResolution,
         duration,
         negative_prompt: negativePrompt || undefined,
       };
@@ -923,6 +926,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
             llm_model: llmModel,
             image_model: imageModel,
             video_ratio: ratio,
+            video_resolution: videoResolution,
             enable_subtitles: templateMode ? true : enableSubtitles,
             subtitle_render_mode: !templateMode && enableSubtitles ? subtitleRenderMode : undefined,
             subtitle_template: templateMode ? selectedTemplate?.id : undefined,
@@ -953,6 +957,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
               image_model: imageModel,
               video_model: videoModel,
               video_ratio: ratio,
+              video_resolution: videoResolution,
               tts_voice: ttsVoice,
               tts_speed: ttsSpeed,
               negative_prompt: negativePrompt || undefined,
@@ -1270,6 +1275,12 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
                     <span className="text-xs font-medium text-gray-500">视频比例</span>
                     <select value={ratio} onChange={e => setRatio(e.target.value)} className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none">
                       {VIDEO_RATIOS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-medium text-gray-500">视频分辨率</span>
+                    <select value={videoResolution} onChange={e => setVideoResolution(e.target.value)} className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none">
+                      {VIDEO_RESOLUTIONS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
                     </select>
                   </label>
                   {(pipeline === 'action_transfer' || (pipeline === 'standard' && (standardVideoMode === 'dynamic_video' || templateVideoEnabled))) && (

@@ -45,6 +45,36 @@ class CharacterDesignerAgent(AgentInterface):
         # 替换场景信息
         return template.format(name=name, desc=desc, style=style)
 
+    @staticmethod
+    def _apply_eval_feedback_to_prompt(base_prompt: str, eval_result: dict, iteration: int) -> str:
+        suggested_prompt = (eval_result.get('suggested_prompt') or '').strip()
+        if suggested_prompt:
+            return suggested_prompt
+
+        hard_failures = eval_result.get('hard_failures') or []
+        soft_issues = eval_result.get('soft_issues') or []
+        issues = eval_result.get('issues') or []
+        suggestion = (eval_result.get('suggestion') or '').strip()
+
+        feedback_lines = []
+        if hard_failures:
+            feedback_lines.append("硬性失败项：" + "；".join(map(str, hard_failures)))
+        if issues:
+            feedback_lines.append("主要问题：" + "；".join(map(str, issues)))
+        if soft_issues:
+            feedback_lines.append("软性问题：" + "；".join(map(str, soft_issues)))
+        if suggestion:
+            feedback_lines.append("修改建议：" + suggestion)
+        if not feedback_lines:
+            return base_prompt
+
+        return (
+            f"{base_prompt}\n\n"
+            f"【第{iteration + 1}轮VLM评估反馈】\n"
+            f"上一轮生成未通过评估，请在下一轮生成时优先修正以下问题，同时保持原始角色/场景设定不变：\n"
+            + "\n".join(f"- {line}" for line in feedback_lines)
+        )
+
     # ─── 文件管理（基于唯一ID） ───
 
     @staticmethod
@@ -165,17 +195,22 @@ class CharacterDesignerAgent(AgentInterface):
                 # VLM 评估
                 eval_result = self._evaluate_with_vlm(save_path, desc, asset_type, vlm_model)
 
-                # 使用固定阈值判断是否接受（8分及以上通过）
                 score = eval_result.get('score', 0)
                 issues = eval_result.get('issues', [])
                 suggestion = eval_result.get('suggestion', '')
-                is_acceptable = score >= 8
+                hard_failures = eval_result.get('hard_failures') or []
+                if 'is_acceptable' in eval_result:
+                    is_acceptable = bool(eval_result.get('is_acceptable')) and not hard_failures
+                else:
+                    is_acceptable = not hard_failures and score >= 7
 
                 if is_acceptable:
                     logger.info(f"[{asset_type}] {name} ✓ VLM评估通过 - 评分: {score}/10")
                 else:
                     logger.warning(f"[{asset_type}] {name} ✗ VLM评估不通过 - 评分: {score}/10")
                     logger.warning(f"[{asset_type}] 问题: {issues}")
+                    if hard_failures:
+                        logger.warning(f"[{asset_type}] 硬性失败项: {hard_failures}")
                     if suggestion:
                         logger.warning(f"[{asset_type}] 建议: {suggestion}")
 
@@ -185,6 +220,8 @@ class CharacterDesignerAgent(AgentInterface):
                     return asset_id, save_path, eval_result
                 else:
                     # 评估不通过，记录问题并继续循环
+                    current_prompt = self._apply_eval_feedback_to_prompt(base_prompt, eval_result, iteration)
+                    logger.info(f"[{asset_type}] {name} 下一轮将使用VLM反馈优化提示词")
                     # 报告进度
                     self._report_progress("角色设计", f"重新生成中 ({iteration + 2}/{max_iterations}): {name}", 0)
 

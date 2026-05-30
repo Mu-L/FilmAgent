@@ -224,7 +224,7 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
             reference_audio_path=segment_audio_path,
             audio=True,
             negative_prompt=params.get("negative_prompt"),
-            resolution=params.get("resolution"),
+            video_resolution=params.get("video_resolution") or params.get("resolution"),
             watermark=params.get("watermark"),
             prompt_extend=params.get("prompt_extend"),
         )

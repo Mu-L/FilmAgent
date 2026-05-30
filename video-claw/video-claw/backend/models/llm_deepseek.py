@@ -21,20 +21,21 @@ class DeepSeek:
     deepseek-v4-flash: DeepSeek-V4 Flash
     deepseek-v4-pro: DeepSeek-V4 Pro
     """
-    def __init__(self, base_url="", api_key=""):
+    def __init__(self, base_url="", api_key="", timeout=120):
         import httpx
         self.base_url = base_url or Config.DEEPSEEK_BASE_URL or "https://api.deepseek.com/v1"
         self.api_key = api_key or Config.DEEPSEEK_API_KEY
+        self.timeout = timeout
         
         if not self.api_key:
             logger.warning("DEEPSEEK_API_KEY is not set")
 
-        kwargs = {"api_key": self.api_key, "base_url": self.base_url}
+        kwargs = {"api_key": self.api_key, "base_url": self.base_url, "timeout": self.timeout}
         proxy = Config.provider_proxy("deepseek")
         if proxy:
-            kwargs["http_client"] = httpx.Client(proxy=proxy)
+            kwargs["http_client"] = httpx.Client(proxy=proxy, timeout=self.timeout)
         self.client = OpenAI(**kwargs)
-        self.max_attempts = 3
+        self.max_attempts = 2
         self.max_tokens = 8000
 
     def query(self, prompt, image_urls=[], model="deepseek-chat", web_search=False):
@@ -67,10 +68,22 @@ class DeepSeek:
                 if response.choices and response.choices[0].message.content:
                     return response.choices[0].message.content
                 else:
-                    logger.warning("DeepSeek returned an empty response; retrying")
+                    choice = response.choices[0] if response.choices else None
+                    message = getattr(choice, "message", None) if choice else None
+                    try:
+                        message_payload = message.model_dump(exclude_none=True) if message else None
+                    except Exception:
+                        message_payload = str(message) if message else None
+                    logger.warning(
+                        "DeepSeek returned an empty response; retrying. model=%s finish_reason=%s usage=%s message=%s",
+                        model,
+                        getattr(choice, "finish_reason", None) if choice else None,
+                        getattr(response, "usage", None),
+                        message_payload,
+                    )
                     time.sleep(2)
             except Exception as e:
-                logger.warning("DeepSeek request failed; retrying: %s", e)
+                logger.warning("DeepSeek request failed; retrying. model=%s timeout=%ss error=%s", model, self.timeout, e)
                 time.sleep(5)
             attempts += 1
                 

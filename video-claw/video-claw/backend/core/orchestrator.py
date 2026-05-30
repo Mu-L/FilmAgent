@@ -52,12 +52,14 @@ SESSION_META_KEYS = (
     "user_textbox_input",
     "style",
     "video_ratio",
+    "video_resolution",
     "expand_idea",
     "llm_model",
     "vlm_model",
     "image_t2i_model",
     "image_it2i_model",
     "video_model",
+    "video_style",
     "enable_concurrency",
     "web_search",
     "episodes",
@@ -81,7 +83,7 @@ def _extract_session_meta(data: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(nested_meta, dict):
         meta.update({k: _normalize_meta_value(v) for k, v in nested_meta.items() if v is not None})
     for key in SESSION_META_KEYS:
-        if key in data and data[key] is not None:
+        if key not in meta and key in data and data[key] is not None:
             meta[key] = _normalize_meta_value(data[key])
     return meta
 
@@ -636,10 +638,12 @@ class WorkflowEngine:
             normalized_meta = {k: _normalize_meta_value(v) for k, v in meta.items() if v is not None}
             if state:
                 state.meta.update(normalized_meta)
-            for k, v in normalized_meta.items():
-                data[k] = v
         if "created_at" not in data:
             data["created_at"] = time.time()
+
+        # 会话级生成参数统一保存在 meta 中；清理旧版本遗留的根字段。
+        for key in SESSION_META_KEYS:
+            data.pop(key, None)
         
         # 2. 将内存中的最新 state 合并到 data 中
         if state:
@@ -650,12 +654,11 @@ class WorkflowEngine:
             data["error"] = state.error
             data["updated_at"] = state.updated_at.timestamp() if isinstance(state.updated_at, datetime) else time.time()
             
-            # 保存元数据：nested meta 是主结构；根字段保留给旧会话文件和外部读写兼容。
+            # 保存元数据：meta 是唯一的会话级生成参数存储位置。
             if state.meta:
                 data["meta"] = copy.deepcopy(state.meta)
-                for k, v in state.meta.items():
-                    if v is not None:
-                        data[k] = _normalize_meta_value(v)
+            else:
+                data.pop("meta", None)
         else:
             data["updated_at"] = time.time()
 
@@ -769,10 +772,19 @@ class WorkflowEngine:
                 fpath = os.path.join(self._session_dir, filename)
                 with open(fpath, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                meta = _extract_session_meta(data)
+                script_artifact = data.get("artifacts", {}).get("script_generation", {})
+                title = (
+                    script_artifact.get("title")
+                    or meta.get("idea")
+                    or meta.get("user_textbox_input")
+                    or data.get("idea", "")
+                )
                 sessions.append({
                     "id": data["session_id"],
-                    "idea": data.get("idea", ""),
-                    "style": data.get("style", ""),
+                    "title": title,
+                    "idea": meta.get("idea") or meta.get("user_textbox_input") or data.get("idea", ""),
+                    "style": meta.get("style") or data.get("style", ""),
                     "date": data.get("updated_at", 0),
                     "status": data.get("status", {}),
                 })

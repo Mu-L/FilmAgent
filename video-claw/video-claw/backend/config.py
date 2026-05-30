@@ -63,8 +63,12 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "image_it2i": "doubao-seedream-5-0-260128",
         "image_t2i": "doubao-seedream-5-0-260128",
         "video": "wan2.7-i2v",
-        "video_ratio": "16:9",
         "eval": "qwen3.5-plus",
+    },
+    "generation": {
+        "style": "realistic",
+        "video_ratio": "16:9",
+        "video_resolution": "720P",
     },
 }
 
@@ -92,6 +96,13 @@ def _coerce_config(data: Dict[str, Any]) -> Dict[str, Any]:
     clean = _deep_merge(DEFAULT_CONFIG, data)
     clean.pop("llm", None)
 
+    legacy_models = data.get("models", {}) if isinstance(data, dict) else {}
+    if isinstance(legacy_models, dict):
+        for legacy_key in ("style", "video_ratio", "video_resolution"):
+            if legacy_key in legacy_models and not _get(data, f"generation.{legacy_key}"):
+                clean.setdefault("generation", {})[legacy_key] = legacy_models[legacy_key]
+            clean["models"].pop(legacy_key, None)
+
     server = clean["server"]
     server["host"] = str(server.get("host") or DEFAULT_CONFIG["server"]["host"])
     try:
@@ -117,6 +128,9 @@ def _coerce_config(data: Dict[str, Any]) -> Dict[str, Any]:
                 value[sub_key] = "" if sub_value is None else str(sub_value)
         else:
             clean["models"][key] = "" if value is None else str(value)
+
+    for key, value in clean["generation"].items():
+        clean["generation"][key] = "" if value is None else str(value)
 
     for provider, values in clean["api_providers"].items():
         if provider == "common":
@@ -200,7 +214,9 @@ class Config:
     IMAGE_IT2I_MODEL = _get(CONFIG, "models.image_it2i")
     IMAGE_T2I_MODEL = _get(CONFIG, "models.image_t2i")
     VIDEO_MODEL = _get(CONFIG, "models.video")
-    VIDEO_RATIO = _get(CONFIG, "models.video_ratio")
+    VIDEO_RATIO = _get(CONFIG, "generation.video_ratio")
+    VIDEO_RESOLUTION = _get(CONFIG, "generation.video_resolution")
+    STYLE = _get(CONFIG, "generation.style")
     EVAL_MODEL = _get(CONFIG, "models.eval")
 
     BASE_DIR = str(BASE_DIR)
@@ -269,7 +285,9 @@ class Config:
         cls.IMAGE_IT2I_MODEL = _get(clean, "models.image_it2i")
         cls.IMAGE_T2I_MODEL = _get(clean, "models.image_t2i")
         cls.VIDEO_MODEL = _get(clean, "models.video")
-        cls.VIDEO_RATIO = _get(clean, "models.video_ratio")
+        cls.VIDEO_RATIO = _get(clean, "generation.video_ratio")
+        cls.VIDEO_RESOLUTION = _get(clean, "generation.video_resolution")
+        cls.STYLE = _get(clean, "generation.style")
         cls.EVAL_MODEL = _get(clean, "models.eval")
         return cls.as_dict()
 

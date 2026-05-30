@@ -52,8 +52,9 @@ async def start_project(req: ProjectStartRequest):
     meta = {
         "idea": final_idea,
         "user_textbox_input": req.idea,
-        "style": req.style or "realistic",
+        "style": req.style or getattr(settings, "STYLE", None) or "realistic",
         "video_ratio": req.video_ratio or "9:16",
+        "video_resolution": req.video_resolution or "720P",
         "expand_idea": req.expand_idea if req.expand_idea is not None else True,
         "llm_model": req.llm_model,
         "vlm_model": req.vlm_model,
@@ -80,7 +81,8 @@ async def start_project(req: ProjectStartRequest):
             "image_it2i_model": meta["image_it2i_model"],
             "video_model": meta["video_model"],
             "episodes": meta["episodes"],
-            "video_ratio": req.video_ratio,
+            "video_ratio": meta["video_ratio"],
+            "video_resolution": meta["video_resolution"],
         }
     }
 
@@ -163,7 +165,7 @@ async def update_models(session_id: str, request: Request):
     if not state:
         raise HTTPException(404, "Session not found")
     body = await request.json()
-    allowed_keys = ("llm_model", "vlm_model", "image_t2i_model", "image_it2i_model", "video_model", "video_ratio", "enable_concurrency")
+    allowed_keys = ("llm_model", "vlm_model", "image_t2i_model", "image_it2i_model", "video_model", "video_ratio", "video_resolution", "style", "enable_concurrency")
     if not state.meta:
         state.meta = {}
     for k in allowed_keys:

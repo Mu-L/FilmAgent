@@ -17,15 +17,15 @@ from .base_agent import AgentInterface
 
 logger = logging.getLogger(__name__)
 
-def _get_shot_prompt(lang: str = "zh") -> str:
+def _get_storyboard_prompt(name: str, lang: str = "zh") -> str:
     from prompts.loader import load_prompt_with_fallback
-    return load_prompt_with_fallback("storyboard", "shot", lang, "zh")
+    return load_prompt_with_fallback("storyboard", name, lang, "zh")
 
 class StoryboardAgent(AgentInterface):
     def __init__(self):
         super().__init__(name="Storyboard")
 
-    MIN_SHOT_DURATION = 3
+    MIN_SHOT_DURATION = 2
     MIN_SEGMENT_DURATION = 5
     MAX_SEGMENT_DURATION = 15
     OPENING_SHOT_TYPES = {"中景", "全景"}
@@ -57,6 +57,28 @@ class StoryboardAgent(AgentInterface):
                 result = json.loads(m.group())
                 if isinstance(result, list): return result
             except json.JSONDecodeError: pass
+        return None
+
+    @staticmethod
+    def _extract_json_object(text: str) -> Optional[dict]:
+        text = text.strip()
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+        try:
+            result = json.loads(text)
+            if isinstance(result, dict):
+                return result
+        except json.JSONDecodeError:
+            pass
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                result = json.loads(text[start:end + 1])
+                if isinstance(result, dict):
+                    return result
+            except json.JSONDecodeError:
+                pass
         return None
 
     @staticmethod
@@ -171,8 +193,560 @@ class StoryboardAgent(AgentInterface):
         return speaker, tone, dialogue
 
     @classmethod
+    def _duration_for_script_unit(cls, text: str, is_dialogue: bool) -> int:
+        if not is_dialogue:
+            return 2
+        dialogue = cls._dialogue_parts(text)
+        dialogue_text = dialogue[2] if dialogue else text
+        visible_text = re.sub(r"\s+", "", dialogue_text)
+        duration = (len(visible_text) + 4) // 5
+        return max(2, min(15, duration))
+
+    @classmethod
+    def _is_entry_action(cls, text: str, character_names: List[str]) -> bool:
+        if cls._dialogue_parts(text):
+            return False
+        if character_names and not cls._match_characters(text, character_names):
+            return False
+        return bool(re.search(
+            r"(走进|走入|进入|进来|推门而入|推门进|冲进|闯进|踏进|来到|回到|走向(?:教室|办公室|会议室|厕所|房间|门口))",
+            text,
+        ))
+
+    @classmethod
+    def _annotate_episode_script(
+        cls,
+        script_text: str,
+        characters: List[dict],
+        settings: List[dict],
+    ) -> Tuple[str, List[dict]]:
+        character_names = cls._character_names(characters)
+        setting_names = cls._setting_names(settings)
+        raw_lines = script_text.replace("\r\n", "\n").split("\n")
+
+        annotated_lines: List[str] = []
+        units: List[dict] = []
+        current_location = setting_names[0] if setting_names else ""
+        scene_characters: List[str] = []
+        scene_key = 0
+
+        for line_number, raw_line in enumerate(raw_lines, 1):
+            stripped = raw_line.strip()
+            line = cls._clean_script_line(cls._strip_markup(stripped))
+            if not line:
+                continue
+            if cls._is_metadata_line(line) or cls._is_end_marker(line):
+                annotated_lines.append(line)
+                continue
+
+            header_location = cls._parse_scene_header(stripped, setting_names)
+            if header_location:
+                scene_key += 1
+                current_location = header_location
+                scene_characters = cls._match_characters(line, character_names)
+                annotated_lines.append(cls._strip_markup(stripped))
+                continue
+
+            if re.match(r"^人物[:：]", line):
+                scene_characters = cls._match_characters(line, character_names)
+                annotated_lines.append(line)
+                continue
+
+            dialogue = cls._dialogue_parts(line)
+            is_action = bool(re.match(r"^<action>", stripped, flags=re.I)) or bool(re.search(r"</action>$", stripped, flags=re.I))
+            if not dialogue and not is_action:
+                annotated_lines.append(line)
+                continue
+
+            unit_id = f"U{len(units) + 1:03d}"
+            is_dialogue = dialogue is not None
+            duration = cls._duration_for_script_unit(line, is_dialogue)
+            matched_chars = cls._match_characters(line, character_names)
+            unit_chars = matched_chars[:]
+            speaker = ""
+            tone = ""
+            if dialogue:
+                speaker, tone, _ = dialogue
+                speaker_matches = cls._match_characters(speaker, character_names)
+                if speaker_matches:
+                    unit_chars = list(dict.fromkeys(speaker_matches + unit_chars))
+
+            units.append({
+                "unit_id": unit_id,
+                "line_number": line_number,
+                "text": line,
+                "duration": duration,
+                "is_dialogue": is_dialogue,
+                "speaker": speaker,
+                "tone": tone,
+                "characters": unit_chars,
+                "scene_characters": scene_characters[:],
+                "scene_key": scene_key,
+                "location": cls._resolve_location(line, current_location, setting_names),
+                "is_entry": cls._is_entry_action(line, character_names),
+            })
+            annotated_lines.append(f"[{duration}秒][{unit_id}] {line}")
+
+        return "\n".join(annotated_lines), units
+
+    @classmethod
+    def _segment_plan_from_units(cls, ep_n: int, segment_number: int, items: List[dict]) -> dict:
+        characters: List[str] = []
+        for item in items:
+            for name in item.get("characters") or item.get("scene_characters") or []:
+                if name not in characters:
+                    characters.append(name)
+        return {
+            "episode_number": ep_n,
+            "segment_number": segment_number,
+            "location": items[0].get("location", "") if items else "",
+            "characters": characters,
+            "total_duration": sum(int(item.get("duration") or 0) for item in items),
+            "items": items,
+        }
+
+    @classmethod
+    def _extract_plan_unit_ids(cls, seg: dict) -> List[str]:
+        ids: List[str] = []
+        for value in seg.get("unit_ids") or []:
+            if isinstance(value, str) and re.match(r"^U\d{3,}$", value):
+                ids.append(value)
+        for item in seg.get("items") or []:
+            if isinstance(item, dict):
+                unit_id = item.get("unit_id")
+                if isinstance(unit_id, str) and re.match(r"^U\d{3,}$", unit_id):
+                    ids.append(unit_id)
+        if not ids:
+            raw = json.dumps(seg, ensure_ascii=False)
+            ids = re.findall(r"\bU\d{3,}\b", raw)
+        return list(dict.fromkeys(ids))
+
+    @classmethod
+    def _validate_segment_plan(cls, ep_n: int, raw_plan: List[dict], units: List[dict]) -> List[dict]:
+        unit_by_id = {item["unit_id"]: item for item in units}
+        source_ids = [item["unit_id"] for item in units]
+        flat_ids: List[str] = []
+        plans: List[dict] = []
+
+        for seg in raw_plan:
+            if not isinstance(seg, dict):
+                raise ValueError("片段规划包含非对象元素")
+            ids = cls._extract_plan_unit_ids(seg)
+            if not ids:
+                raise ValueError("片段缺少 unit_ids")
+            for unit_id in ids:
+                if unit_id not in unit_by_id:
+                    raise ValueError(f"片段包含未知 unit_id: {unit_id}")
+                if unit_id in flat_ids:
+                    raise ValueError(f"片段重复引用 unit_id: {unit_id}")
+
+            items = [unit_by_id[unit_id] for unit_id in ids]
+            scene_keys = {item.get("scene_key") for item in items}
+            if len(scene_keys) > 1:
+                raise ValueError("片段跨场景，场景切换必须分片段")
+            for idx, item in enumerate(items):
+                if item.get("is_entry") and idx != 0:
+                    raise ValueError(f"{item['unit_id']} 是入场动作，必须作为片段开头")
+
+            duration = sum(int(item.get("duration") or 0) for item in items)
+            if duration > cls.MAX_SEGMENT_DURATION:
+                raise ValueError(f"片段时长 {duration}s 超出上限 {cls.MAX_SEGMENT_DURATION}s")
+
+            flat_ids.extend(ids)
+            plans.append(cls._segment_plan_from_units(ep_n, len(plans) + 1, items))
+
+        if flat_ids != source_ids:
+            missing = [unit_id for unit_id in source_ids if unit_id not in flat_ids]
+            extra = [unit_id for unit_id in flat_ids if unit_id not in source_ids]
+            raise ValueError(f"片段规划动作/台词缺漏或乱序，missing={missing}, extra={extra}")
+        return plans
+
+    @classmethod
+    def _fallback_segment_plan(cls, ep_n: int, units: List[dict]) -> List[dict]:
+        plans: List[dict] = []
+        current: List[dict] = []
+
+        def flush_current():
+            nonlocal current
+            if not current:
+                return
+            plans.append(cls._segment_plan_from_units(ep_n, len(plans) + 1, current))
+            current = []
+
+        for unit in units:
+            current_duration = sum(int(item.get("duration") or 0) for item in current)
+            scene_changed = current and unit.get("scene_key") != current[-1].get("scene_key")
+            entry_boundary = current and unit.get("is_entry")
+            would_overflow = current and current_duration + int(unit.get("duration") or 0) > cls.MAX_SEGMENT_DURATION
+
+            if scene_changed or entry_boundary or would_overflow:
+                flush_current()
+            current.append(unit)
+
+        flush_current()
+        return plans
+
+    @staticmethod
+    def _scene_item_payload(items: List[dict]) -> List[dict]:
+        return [
+            {
+                "unit_id": item["unit_id"],
+                "duration": item["duration"],
+                "text": item["text"],
+                "characters": item.get("characters", []),
+                "is_entry": item.get("is_entry", False),
+            }
+            for item in items
+        ]
+
+    @classmethod
+    def _build_segmentation_prompt(
+        cls,
+        ep_n: int,
+        ep_t: str,
+        annotated_script: str,
+        characters: List[dict],
+        settings: List[dict],
+        retry_error: str = "",
+    ) -> str:
+        template = _get_storyboard_prompt("segment_plan", "zh")
+        retry_feedback = ""
+        if retry_error:
+            retry_feedback = f"上一次输出未通过校验，错误原因：{retry_error}\n请根据这个错误修正输出。"
+        from prompts.loader import format_prompt
+        return format_prompt(
+            template,
+            episode_number=ep_n,
+            episode_title=ep_t,
+            annotated_script=annotated_script,
+            asset_characters=json.dumps(characters, ensure_ascii=False),
+            asset_settings=json.dumps(settings, ensure_ascii=False),
+            retry_feedback=retry_feedback,
+        )
+
+    @classmethod
+    def _build_segment_design_prompt(
+        cls,
+        ep_n: int,
+        ep_t: str,
+        plan: dict,
+        style: str,
+        retry_error: str = "",
+    ) -> str:
+        items_payload = cls._scene_item_payload(plan.get("items", []))
+        segment_total = sum(int(item.get("duration") or 0) for item in plan.get("items", []))
+        output_total = max(cls.MIN_SEGMENT_DURATION, segment_total)
+        template = _get_storyboard_prompt("segment_design", "zh")
+        retry_feedback = ""
+        if retry_error:
+            retry_feedback = f"上一次输出未通过校验，错误原因：{retry_error}\n请根据这个错误修正输出。"
+        from prompts.loader import format_prompt
+        return format_prompt(
+            template,
+            episode_number=ep_n,
+            episode_title=ep_t,
+            segment_number=plan.get("segment_number"),
+            location=plan.get("location", ""),
+            characters=json.dumps(plan.get("characters", []), ensure_ascii=False),
+            total_duration=output_total,
+            items=json.dumps(items_payload, ensure_ascii=False),
+            style=style,
+            retry_feedback=retry_feedback,
+        )
+
+    async def _query_json_array_with_retries(
+        self,
+        prompt: str,
+        llm_model: str,
+        sid: str,
+        *,
+        label: str,
+        max_retries: int = 3,
+    ) -> List[dict]:
+        from models.llm_client import LLM
+
+        loop = asyncio.get_running_loop()
+        last_error: Optional[Exception] = None
+        raw = ""
+        for attempt in range(max_retries):
+            try:
+                llm = LLM()
+                raw = await loop.run_in_executor(
+                    None,
+                    self._cancellable_query,
+                    llm,
+                    prompt,
+                    [],
+                    llm_model,
+                    False,
+                    sid,
+                    False,
+                )
+                extracted = self._extract_json_array(raw)
+                if extracted is not None:
+                    return extracted
+                raise ValueError("模型输出不是 JSON 数组")
+            except Exception as exc:
+                last_error = exc
+                logger.warning("[Storyboard] %s attempt %d failed: %s", label, attempt + 1, exc)
+        logger.error("[Storyboard] %s failed after retries. Last raw: %s", label, raw[:2000])
+        raise last_error or ValueError(f"{label} 失败")
+
+    async def _query_json_object_with_retries(
+        self,
+        prompt: str,
+        llm_model: str,
+        sid: str,
+        *,
+        label: str,
+        max_retries: int = 3,
+    ) -> dict:
+        from models.llm_client import LLM
+
+        loop = asyncio.get_running_loop()
+        last_error: Optional[Exception] = None
+        raw = ""
+        for attempt in range(max_retries):
+            try:
+                llm = LLM()
+                raw = await loop.run_in_executor(
+                    None,
+                    self._cancellable_query,
+                    llm,
+                    prompt,
+                    [],
+                    llm_model,
+                    False,
+                    sid,
+                    False,
+                )
+                extracted = self._extract_json_object(raw)
+                if extracted is not None:
+                    return extracted
+                raise ValueError("模型输出不是 JSON 对象")
+            except Exception as exc:
+                last_error = exc
+                logger.warning("[Storyboard] %s attempt %d failed: %s", label, attempt + 1, exc)
+        logger.error("[Storyboard] %s failed after retries. Last raw: %s", label, raw[:2000])
+        raise last_error or ValueError(f"{label} 失败")
+
+    @classmethod
+    def _normalize_shot_type(cls, value: Any, *, first: bool = False) -> str:
+        text = str(value or "")
+        if "全景" in text:
+            shot_type = "全景"
+        elif "中景" in text:
+            shot_type = "中景"
+        elif "近景" in text or "特写" in text:
+            shot_type = "近景"
+        else:
+            shot_type = "中景"
+        if first and shot_type not in cls.OPENING_SHOT_TYPES:
+            return "中景"
+        return shot_type
+
+    @classmethod
+    def _shot_durations_for_plan(cls, plan: dict) -> List[int]:
+        durations = [int(item.get("duration") or cls.MIN_SHOT_DURATION) for item in plan.get("items", [])]
+        total = sum(durations)
+        if durations and total < cls.MIN_SEGMENT_DURATION:
+            durations[-1] += cls.MIN_SEGMENT_DURATION - total
+        return durations
+
+    @classmethod
+    def _opening_camera_prefix(cls, shot_type: str, characters: List[str]) -> str:
+        subject = "、".join(characters) if characters else "片段中的所有人物"
+        return f"{shot_type}，平视机位，镜头同时拍到{subject}，站位：主要人物面向镜头或彼此成自然对话关系分布。"
+
+    @classmethod
+    def _normalize_segment_design(cls, ep_n: int, plan: dict, raw_design: dict) -> dict:
+        items = plan.get("items", [])
+        raw_shots = raw_design.get("shots") if isinstance(raw_design, dict) else None
+        if not isinstance(raw_shots, list) or not raw_shots:
+            raise ValueError("片段设计缺少 shots")
+
+        by_id = {
+            shot.get("unit_id"): shot
+            for shot in raw_shots
+            if isinstance(shot, dict) and isinstance(shot.get("unit_id"), str)
+        }
+        if by_id:
+            missing = [item["unit_id"] for item in items if item["unit_id"] not in by_id]
+            extra = [unit_id for unit_id in by_id if unit_id not in {item["unit_id"] for item in items}]
+            if missing or extra:
+                raise ValueError(f"片段设计 unit_id 不匹配，missing={missing}, extra={extra}")
+            ordered_raw = [by_id[item["unit_id"]] for item in items]
+        else:
+            if len(raw_shots) != len(items):
+                raise ValueError("片段设计 shots 数量与 items 不一致")
+            ordered_raw = raw_shots
+
+        durations = cls._shot_durations_for_plan(plan)
+        shots: List[dict] = []
+        characters = plan.get("characters", [])
+        for idx, (item, raw_shot) in enumerate(zip(items, ordered_raw)):
+            shot_type = cls._normalize_shot_type(raw_shot.get("shot_type"), first=(idx == 0))
+            content = str(raw_shot.get("content") or "").strip()
+            shots.append({
+                "shot_number": idx + 1,
+                "shot_type": shot_type,
+                "duration": durations[idx],
+                "content": content,
+            })
+
+        return cls._segment_from_shots(
+            ep_n,
+            int(plan.get("segment_number") or 1),
+            plan.get("location", ""),
+            shots,
+            characters,
+        )
+
+    @classmethod
+    def _fallback_design_segment(cls, ep_n: int, plan: dict) -> dict:
+        characters = plan.get("characters", [])
+        durations = cls._shot_durations_for_plan(plan)
+        shots: List[dict] = []
+        for idx, item in enumerate(plan.get("items", [])):
+            is_dialogue = bool(item.get("is_dialogue"))
+            speaker = item.get("speaker") or "角色"
+            shot_type = "中景" if idx == 0 or is_dialogue else "全景"
+            if idx == 0:
+                prefix = cls._opening_camera_prefix(shot_type, characters)
+                content = f"{prefix}人物朝向彼此或镜头侧前方。{item['text']}"
+            elif is_dialogue:
+                content = f"{shot_type}，平视略侧机位拍摄{speaker}，人物面向对话对象。{item['text']}"
+            else:
+                subject = "、".join(item.get("characters") or characters) or "场景主体"
+                content = f"{shot_type}，平视跟拍{subject}，人物沿动作方向移动。{item['text']}"
+            shots.append({
+                "shot_number": idx + 1,
+                "shot_type": shot_type,
+                "duration": durations[idx],
+                "content": content,
+            })
+        return cls._segment_from_shots(
+            ep_n,
+            int(plan.get("segment_number") or 1),
+            plan.get("location", ""),
+            shots,
+            characters,
+        )
+
+    async def _plan_episode_segments(
+        self,
+        ep_n: int,
+        ep_t: str,
+        annotated_script: str,
+        units: List[dict],
+        characters: List[dict],
+        settings: List[dict],
+        llm_model: str,
+        sid: str,
+    ) -> List[dict]:
+        last_error: Optional[Exception] = None
+        for attempt in range(3):
+            try:
+                prompt = self._build_segmentation_prompt(
+                    ep_n,
+                    ep_t,
+                    annotated_script,
+                    characters,
+                    settings,
+                    retry_error=str(last_error) if last_error else "",
+                )
+                raw_plan = await self._query_json_array_with_retries(
+                    prompt,
+                    llm_model,
+                    sid,
+                    label=f"第 {ep_n} 集片段规划",
+                    max_retries=1,
+                )
+                return self._validate_segment_plan(ep_n, raw_plan, units)
+            except Exception as exc:
+                last_error = exc
+                logger.warning("[Storyboard] Episode %s segment plan validation attempt %d failed: %s", ep_n, attempt + 1, exc)
+
+        logger.warning("[Storyboard] Episode %s falling back to deterministic segment plan: %s", ep_n, last_error)
+        return self._fallback_segment_plan(ep_n, units)
+
+    async def _design_one_segment(
+        self,
+        ep_n: int,
+        ep_t: str,
+        plan: dict,
+        style: str,
+        llm_model: str,
+        sid: str,
+    ) -> dict:
+        last_error: Optional[Exception] = None
+        for attempt in range(3):
+            try:
+                prompt = self._build_segment_design_prompt(
+                    ep_n,
+                    ep_t,
+                    plan,
+                    style,
+                    retry_error=str(last_error) if last_error else "",
+                )
+                raw_design = await self._query_json_object_with_retries(
+                    prompt,
+                    llm_model,
+                    sid,
+                    label=f"第 {ep_n} 集片段 {plan.get('segment_number')} 分镜设计",
+                    max_retries=1,
+                )
+                return self._normalize_segment_design(ep_n, plan, raw_design)
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "[Storyboard] Episode %s segment %s design attempt %d failed: %s",
+                    ep_n,
+                    plan.get("segment_number"),
+                    attempt + 1,
+                    exc,
+                )
+
+        logger.warning(
+            "[Storyboard] Episode %s segment %s falling back to deterministic design: %s",
+            ep_n,
+            plan.get("segment_number"),
+            last_error,
+        )
+        return self._fallback_design_segment(ep_n, plan)
+
+    async def _design_episode_storyboard(
+        self,
+        ep_n: int,
+        ep_t: str,
+        ep_c: str,
+        characters: List[dict],
+        settings: List[dict],
+        style: str,
+        llm_model: str,
+        sid: str,
+    ) -> List[dict]:
+        annotated_script, units = self._annotate_episode_script(ep_c, characters, settings)
+        if not units:
+            raise Exception(f"第 {ep_n} 集未能识别出动作或台词")
+
+        self._report_progress("分镜", f"第 {ep_n} 集已完成动作/台词时长标注，共 {len(units)} 项", 20)
+        plans = await self._plan_episode_segments(ep_n, ep_t, annotated_script, units, characters, settings, llm_model, sid)
+        if not plans:
+            raise Exception(f"第 {ep_n} 集片段规划失败")
+
+        self._report_progress("分镜", f"第 {ep_n} 集已规划 {len(plans)} 个片段，开始并行设计分镜", 35)
+        tasks = [
+            self._design_one_segment(ep_n, ep_t, plan, style, llm_model, sid)
+            for plan in plans
+        ]
+        segments = await asyncio.gather(*tasks)
+        segments.sort(key=lambda item: int(item.get("segment_number") or 0))
+        return segments
+
+    @classmethod
     def _estimate_duration(cls, text: str, is_dialogue: bool) -> int:
-        """Heuristic duration in seconds; every shot is at least 3s."""
+        """Legacy heuristic duration in seconds."""
         visible_text = re.sub(r"[“”\"'，。！？、,.!?；;：:\s]", "", text)
         if is_dialogue:
             duration = 3 + len(visible_text) // 18
@@ -484,7 +1058,6 @@ class StoryboardAgent(AgentInterface):
         return valid_episodes
 
     async def process(self, input_data: Any, intervention: Optional[Dict] = None) -> Dict:
-        from models.llm_client import LLM
         input_data = self._merge_session_params(input_data)
         sid = input_data.get("session_id")
         if not sid: raise Exception("Missing session_id")
@@ -492,11 +1065,12 @@ class StoryboardAgent(AgentInterface):
         session_file = os.path.join("code/data/sessions", f"{sid}.json")
         with open(session_file, "r", encoding="utf-8") as f:
             session_data = json.load(f)
+        session_meta = session_data.get("meta") if isinstance(session_data.get("meta"), dict) else {}
             
-        llm_model = input_data.get("llm_model") or session_data.get("llm_model")
+        llm_model = input_data.get("llm_model") or session_meta.get("llm_model")
         if not llm_model:
             raise ValueError("Missing required model configuration: llm_model")
-        style = input_data.get("style") or session_data.get("style") or "anime"
+        style = input_data.get("style") or session_meta.get("style") or "anime"
         
         # 处理人工干预/修改
         if intervention and "modified_storyboard" in intervention:
@@ -536,76 +1110,28 @@ class StoryboardAgent(AgentInterface):
 
         chars = script_data.get("characters", [])
         sets = script_data.get("settings", [])
-        is_zh = any("\u4e00" <= c <= "\u9fff" for c in script_data.get("title", ""))
-        shot_prompt_tpl = _get_shot_prompt("zh" if is_zh else "en")
         
         self._report_progress("分镜", f"开始生成 {len(episodes_to_proc)} 集缺失的分镜...", 5)
         
         async def proc_ep(ep):
-            # ... (保持原本处理逻辑不变)
             ep_n = ep.get("episode_number", 1)
-            # ... (以下为原本 proc_ep 逻辑)
             ep_t = ep.get("act_title", f"第{ep_n}集")
             ep_c = ep.get("content", "")
-
-            regex_segments = self._build_segments_by_regex(ep_n, ep_c, chars, sets)
-            if regex_segments:
-                logger.info("[Storyboard] Episode %s parsed by regex into %d segments.", ep_n, len(regex_segments))
-                self._report_progress("分镜", f"集数 {ep_n} 已通过规则解析生成分镜", 35)
-                return {
-                    "episode_number": ep_n,
-                    "episode_title": ep_t,
-                    "segments": regex_segments
-                }
-
-            logger.warning("[Storyboard] Episode %s regex parsing produced no segments; falling back to LLM.", ep_n)
-            
-            # 清洗剧本内容：按行拆分，用于提示说明“一行一分镜”
-            lines = [line.strip() for line in ep_c.split('\n') if line.strip()]
-            script_text_with_lines = "\n".join([f"L{idx+1}: {line}" for idx, line in enumerate(lines)])
-
-            prompt = shot_prompt_tpl.format(
-                act_number=ep_n, 
-                act_title=ep_t, 
-                script_text=script_text_with_lines, 
-                asset_characters=json.dumps(chars, ensure_ascii=False), 
-                asset_settings=json.dumps(sets, ensure_ascii=False),
-                style=style
+            segments = await self._design_episode_storyboard(
+                ep_n,
+                ep_t,
+                ep_c,
+                chars,
+                sets,
+                style,
+                llm_model,
+                sid,
             )
-            
-            llm = LLM()
-            loop = asyncio.get_running_loop()
-            
-            # 增加重试机制 (Max 3 retries)
-            max_retries = 3
-            extracted = None
-            raw = ""
-            
-            for attempt in range(max_retries):
-                try:
-                    self._report_progress("分镜", f"生成集数 {ep_n} (第 {attempt + 1} 次尝试)...", 5 + attempt * 2)
-                    raw = await loop.run_in_executor(None, self._cancellable_query, llm, prompt, [], llm_model, False, sid, False)
-                    extracted = self._extract_json_array(raw)
-                    if extracted:
-                        break
-                    logger.warning(f"Episode {ep_n} Attempt {attempt + 1}: Failed to extract JSON array. Retrying...")
-                except Exception as e:
-                    logger.error(f"Episode {ep_n} Attempt {attempt + 1}: LLM query error: {str(e)}")
-                    if attempt == max_retries - 1: raise e
-            
-            if not extracted:
-                logger.error(f"LLM output failed to parse as JSON for Episode {ep_n} after {max_retries} attempts. Raw: {raw}")
-                # 抛出异常以触发 orchestrator 的错误状态处理逻辑
-                raise Exception(f"第 {ep_n} 集分镜生成失败：模型输出无法解析")
-                
-            valid_segments = self._normalize_llm_segments(ep_n, extracted)
-            if not valid_segments:
-                raise Exception(f"第 {ep_n} 集分镜生成失败：无法从模型输出构造有效片段")
 
             return {
                 "episode_number": ep_n,
                 "episode_title": ep_t,
-                "segments": valid_segments
+                "segments": segments
             }
 
         # 核心：支持流式保存增量产物，让前端能看到实时进度
@@ -622,7 +1148,7 @@ class StoryboardAgent(AgentInterface):
         # 报告一次进度，带上 asset_complete 强制前端从磁盘刷新一次初步数据
         self._report_progress("分镜设计", "准备生成分镜...", 10, {"asset_complete": True})
 
-        results_queue = [proc_ep(ep) for ep in episodes_to_proc]
+        results_queue = [asyncio.create_task(proc_ep(ep)) for ep in episodes_to_proc]
 
         for coro in asyncio.as_completed(results_queue):
             res = await coro

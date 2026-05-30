@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CheckCircle, Circle, Loader, Edit3, AlertCircle, Square, Zap, Settings2, ChevronDown } from 'lucide-react';
 import clsx from 'clsx';
-import { LLM_PROVIDERS, T2I_PROVIDERS, I2I_PROVIDERS, VIDEO_PROVIDERS, VLM_PROVIDERS, VIDEO_RATIOS, ProviderGroup } from '@/config/models';
+import { LLM_PROVIDERS, T2I_PROVIDERS, I2I_PROVIDERS, VIDEO_PROVIDERS, VLM_PROVIDERS, VIDEO_RATIOS, VIDEO_RESOLUTIONS, ProviderGroup } from '@/config/models';
 
 export type StageStatus = 'pending' | 'running' | 'waiting' | 'completed' | 'error' | 'stopped';
 
@@ -25,6 +25,7 @@ export interface ModelConfig {
   image_it2i_model: string;
   video_model: string;
   video_ratio: string;
+  video_resolution: string;
   enable_concurrency: boolean;
 }
 
@@ -176,6 +177,18 @@ function ModelSelector({
               ))}
             </div>
           </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] text-gray-400 font-medium">视频分辨率</span>
+            <select
+              value={config.video_resolution}
+              onChange={e => update('video_resolution', e.target.value)}
+              className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 outline-none w-full"
+            >
+              {VIDEO_RESOLUTIONS.map(item => (
+                <option key={item.id} value={item.id}>{item.label}</option>
+              ))}
+            </select>
+          </label>
           <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
             <input
               type="checkbox"
@@ -225,7 +238,8 @@ export default function TopBar({
   };
 
   return (
-    <header className="min-h-14 bg-white border-b border-gray-200 flex items-center px-4 flex-shrink-0 z-10 min-w-0">
+    <>
+    <header className="fixed top-0 right-0 left-[var(--app-sidebar-width)] z-30 h-14 bg-white border-b border-gray-200 flex items-center px-4 min-w-0 transition-[left] duration-300">
       {/* Logo & 名称 */}
       <button
         onClick={onHomeClick}
@@ -353,5 +367,7 @@ export default function TopBar({
 
       </div>
     </header>
+    <div className="h-14 flex-shrink-0" />
+    </>
   );
 }

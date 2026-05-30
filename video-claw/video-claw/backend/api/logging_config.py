@@ -23,8 +23,26 @@ class AIGCFormatter(logging.Formatter):
         "CRITICAL": "X",
     }
 
+    LEVEL_COLORS = {
+        "DEBUG": "\033[90m",
+        "INFO": "\033[36m",
+        "WARNING": "\033[33m",
+        "ERROR": "\033[31m",
+        "CRITICAL": "\033[1;37;41m",
+    }
+    RESET = "\033[0m"
+
+    def __init__(self, *args, use_color=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.use_color = use_color
+
     def format(self, record: logging.LogRecord) -> str:
         record.level_icon = self.LEVEL_ICONS.get(record.levelname, record.levelname[:1])
+        if self.use_color:
+            color = self.LEVEL_COLORS.get(record.levelname)
+            if color:
+                record.level_icon = f"{color}{record.level_icon}{self.RESET}"
+                record.levelname = f"{color}{record.levelname}{self.RESET}"
         return super().format(record)
 
 
@@ -43,6 +61,7 @@ def setup_concurrent_logging():
     console_handler.setFormatter(AIGCFormatter(
         "%(asctime)s | %(level_icon)s %(levelname)-7s | %(name)s:%(lineno)d | %(message)s",
         datefmt="%H:%M:%S",
+        use_color=sys.stdout.isatty(),
     ))
 
     listener = QueueListener(log_queue, console_handler, respect_handler_level=True)
@@ -54,11 +73,11 @@ def setup_concurrent_logging():
     root_logger.handlers.clear()
     root_logger.addHandler(queue_handler)
 
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "httpx"):
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "httpx", "httpcore"):
         logger = logging.getLogger(name)
         logger.handlers.clear()
         logger.propagate = True
-        logger.setLevel(logging.WARNING if name == "httpx" else level)
+        logger.setLevel(logging.WARNING if name in {"httpx", "httpcore"} else level)
     apply_access_log_setting()
 
     _listener = listener

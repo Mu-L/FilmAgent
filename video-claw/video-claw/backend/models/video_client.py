@@ -161,6 +161,8 @@ class VideoClient:
                 model,
                 duration,
                 sound,
+                video_ratio,
+                resolution,
                 mode,
                 cfg_scale,
                 negative_prompt or "",
@@ -203,6 +205,11 @@ class VideoClient:
             )
         else:
             raise ValueError(f"未知的视频生成模型: {model}")
+
+    @staticmethod
+    def _normalize_seedance_resolution(resolution: Optional[str]) -> str:
+        value = (resolution or "720p").strip().lower()
+        return value if value in {"720p", "1080p"} else "720p"
 
     def _generate_wan(
         self,
@@ -263,6 +270,8 @@ class VideoClient:
         model: str,
         duration: int = 5,
         sound: str = "",
+        video_ratio: str = "16:9",
+        resolution: Optional[str] = None,
         mode: str = "pro",
         cfg_scale: float = 0.5,
         negative_prompt: str = "",
@@ -276,6 +285,8 @@ class VideoClient:
             model=model,
             duration=duration,
             sound=sound,
+            video_ratio=video_ratio,
+            resolution=resolution,
             mode=mode,
             cfg_scale=cfg_scale,
             negative_prompt=negative_prompt,
@@ -303,7 +314,7 @@ class VideoClient:
             model=model,
             duration=duration,
             ratio=video_ratio,
-            resolution=resolution or "720p",
+            resolution=self._normalize_seedance_resolution(resolution),
             seed=seed,
             watermark=watermark,
             generate_audio=generate_audio,

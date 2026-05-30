@@ -9,7 +9,9 @@ import {
   T2I_PROVIDERS,
   VIDEO_PROVIDERS,
   VIDEO_RATIOS,
+  VIDEO_RESOLUTIONS,
   VLM_PROVIDERS,
+  STYLES,
   type ProviderGroup,
 } from '@/config/models';
 
@@ -114,8 +116,16 @@ const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
       { path: 'models.image_it2i', label: 'image_it2i', type: 'select', options: MODEL_SELECTS.image_it2i },
       { path: 'models.image_t2i', label: 'image_t2i', type: 'select', options: MODEL_SELECTS.image_t2i },
       { path: 'models.video', label: 'video', type: 'select', options: MODEL_SELECTS.video },
-      { path: 'models.video_ratio', label: 'video_ratio', type: 'select', options: VIDEO_RATIOS },
       { path: 'models.eval', label: 'eval', type: 'select', options: MODEL_SELECTS.eval },
+    ],
+  },
+  {
+    title: '视频生成配置',
+    description: '只对主流程生效：风格、画幅比例和视频分辨率。',
+    fields: [
+      { path: 'generation.style', label: '风格', type: 'select', options: STYLES },
+      { path: 'generation.video_ratio', label: '视频长宽比', type: 'select', options: VIDEO_RATIOS },
+      { path: 'generation.video_resolution', label: '视频分辨率', type: 'select', options: VIDEO_RESOLUTIONS },
     ],
   },
 ];

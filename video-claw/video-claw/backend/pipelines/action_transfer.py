@@ -43,7 +43,7 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
         first_clip_path=video_path,
         reference_image_path=image_path,
         negative_prompt=params.get("negative_prompt"),
-        resolution=params.get("resolution"),
+        video_resolution=params.get("video_resolution") or params.get("resolution"),
         watermark=params.get("watermark"),
         prompt_extend=params.get("prompt_extend"),
     )

@@ -82,6 +82,7 @@ def generate_video_api(
     image_path: Optional[str] = None,
     duration: int = 5,
     video_ratio: str = "9:16",
+    video_resolution: Optional[str] = None,
     **params,
 ) -> str:
     provider, resolved_model = parse_api_workflow(model, "video")
@@ -101,6 +102,7 @@ def generate_video_api(
         model=resolved_model,
         duration=safe_duration,
         video_ratio=video_ratio,
+        resolution=video_resolution or params.pop("resolution", None),
         **params,
     )
     return output_path

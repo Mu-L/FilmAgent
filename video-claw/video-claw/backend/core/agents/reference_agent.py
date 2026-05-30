@@ -216,6 +216,36 @@ class ReferenceGeneratorAgent(AgentInterface):
 
     # ─── 单张生成 ───
 
+    @staticmethod
+    def _apply_eval_feedback_to_visual_prompt(current_prompt: str, eval_result: dict, version: int) -> str:
+        suggested_prompt = (eval_result.get('suggested_prompt') or '').strip()
+        if suggested_prompt:
+            return suggested_prompt
+
+        hard_failures = eval_result.get('hard_failures') or []
+        soft_issues = eval_result.get('soft_issues') or []
+        issues = eval_result.get('issues') or []
+        suggestion = (eval_result.get('suggestion') or '').strip()
+
+        feedback_lines = []
+        if hard_failures:
+            feedback_lines.append("硬性失败项：" + "；".join(map(str, hard_failures)))
+        if issues:
+            feedback_lines.append("主要问题：" + "；".join(map(str, issues)))
+        if soft_issues:
+            feedback_lines.append("软性问题：" + "；".join(map(str, soft_issues)))
+        if suggestion:
+            feedback_lines.append("修改建议：" + suggestion)
+        if not feedback_lines:
+            return current_prompt
+
+        return (
+            f"{current_prompt}\n\n"
+            f"【第{version + 1}轮VLM评估反馈】\n"
+            f"上一轮参考图未通过评估，请在下一轮生成时优先修正以下问题；不要改变角色核心外貌和场景核心设定：\n"
+            + "\n".join(f"- {line}" for line in feedback_lines)
+        )
+
     def _generate_one(self, img_client, sid: str, segment: dict,
                       first_frame_prompt: str, refs: List[str],
                       style: str, it2i_model: str, t2i_model: str,
@@ -224,14 +254,14 @@ class ReferenceGeneratorAgent(AgentInterface):
                       max_versions: int = 3) -> tuple:
         """生成单个片段参考图，返回 (segment_id, path_or_None, eval_result)
 
-        最多生成 max_versions 个版本，如果所有版本都没有达到8分，
+        最多生成 max_versions 个版本，如果所有版本都没有达到硬性合格标准，
         使用 VLM 选择最好的一张作为最终参考图。
         """
         segment_id = segment.get('segment_id', '')
 
         # 仅提取第一个镜头的描述作为当前 Plot
         plot = segment.get('shots', [])[0].get('content', '') if segment.get('shots') else ""
-        visual_prompt = first_frame_prompt
+        current_visual_prompt = first_frame_prompt
 
         # 取消时直接跳过，不抛异常，以保留已生成的部分结果
         if self.cancellation_check and self.cancellation_check():
@@ -252,7 +282,7 @@ class ReferenceGeneratorAgent(AgentInterface):
             self._check_cancel()
 
             style_prompt = self._get_style_prompt(style)
-            full_prompt = f"{style_prompt}, {first_frame_prompt}"
+            full_prompt = f"{style_prompt}, {current_visual_prompt}"
 
             save_path = self._next_version_path(sid, segment_id)
             save_dir = os.path.dirname(save_path)
@@ -277,45 +307,66 @@ class ReferenceGeneratorAgent(AgentInterface):
                     os.rename(gen, save_path)
 
                 # VLM 评估
-                eval_result = self._evaluate_with_vlm(save_path, segment, plot, visual_prompt,
+                eval_result = self._evaluate_with_vlm(save_path, segment, plot, current_visual_prompt,
                                                       character_description=character_description,
                                                       setting_description=setting_description,
                                                       vlm_model=vlm_model)
 
                 score = eval_result.get('score', 0)
-                is_acceptable = score >= 8
+                hard_failures = eval_result.get('hard_failures') or []
+                if 'is_acceptable' in eval_result:
+                    is_acceptable = bool(eval_result.get('is_acceptable')) and not hard_failures
+                else:
+                    is_acceptable = not hard_failures and score >= 7
 
                 logger.info(f"[{segment_id}] 版本{version + 1}: 评分 {score}/10, {'✓通过' if is_acceptable else '✗不通过'}")
+                if hard_failures:
+                    logger.warning(f"[{segment_id}] 硬性失败项: {hard_failures}")
 
                 # 记录版本信息
+                eval_result["final_visual_prompt"] = current_visual_prompt
                 all_versions.append(save_path)
                 all_eval_results.append(eval_result)
 
-                # 如果达到8分，立即返回
+                # 如果 VLM 判定达到硬性标准，立即返回
                 if is_acceptable:
                     return segment_id, save_path, eval_result
 
                 # 报告进度
                 if version < max_versions - 1:
+                    current_visual_prompt = self._apply_eval_feedback_to_visual_prompt(current_visual_prompt, eval_result, version)
+                    logger.info(f"[{segment_id}] 下一轮将使用VLM反馈优化首帧提示词")
                     self._report_progress("参考图", f"重新生成中 ({version + 2}/{max_versions}): {segment_id}", 0)
 
             except Exception as e:
                 logger.error(f"Segment {segment_id} image generation failed: {e}")
 
-        # 所有版本都没有达到8分，使用 VLM 选择最好的
+        # 所有版本都没有达到硬性标准，使用 VLM 选择最好的
         if all_versions:
-            logger.warning(f"[{segment_id}] 所有版本都未达到8分，使用VLM选择最佳...")
+            logger.warning(f"[{segment_id}] 所有版本都未达到硬性合格标准，使用VLM选择最佳...")
             best_path, best_eval = self._select_best_with_vlm(
-                all_versions, segment, plot, visual_prompt,
+                all_versions, segment, plot, current_visual_prompt,
                 character_description=character_description,
                 setting_description=setting_description,
                 vlm_model=vlm_model
             )
-            if best_path:
-                return segment_id, best_path, best_eval
+            if best_path and isinstance(best_eval, dict):
+                best_eval["final_visual_prompt"] = current_visual_prompt
+                hard_failures = best_eval.get("hard_failures") or []
+                is_acceptable = bool(best_eval.get("is_acceptable")) and not hard_failures
+                if is_acceptable:
+                    return segment_id, best_path, best_eval
+                logger.warning(
+                    "[%s] VLM选择的最佳图仍有硬性失败项，不作为最终参考图: %s",
+                    segment_id,
+                    hard_failures or best_eval.get("issues", []),
+                )
+                return segment_id, None, best_eval
 
         # 如果没有任何生成成功
         logger.warning(f"[{segment_id}] 没有成功生成任何图片")
+        if all_eval_results and isinstance(all_eval_results[-1], dict):
+            all_eval_results[-1]["final_visual_prompt"] = current_visual_prompt
         return segment_id, None, None
 
     def _select_best_with_vlm(self, image_paths: List[str], segment: dict, plot: str, visual_prompt: str,
@@ -354,11 +405,15 @@ class ReferenceGeneratorAgent(AgentInterface):
                 if 0 <= selected_idx < len(image_paths):
                     best_path = image_paths[selected_idx]
                     logger.info(f"[{segment_id}] VLM选择第{selected_idx + 1}张作为最佳图片")
+                    hard_failures = selected.get('hard_failures') or []
+                    score = selected.get('score', 5)
                     # 构建评估结果
                     best_eval = {
-                        "score": selected.get('score', 5),
+                        "score": score,
+                        "hard_failures": hard_failures,
+                        "soft_issues": selected.get('soft_issues', []),
                         "issues": selected.get('issues', []),
-                        "is_acceptable": True,
+                        "is_acceptable": not hard_failures and score >= 7,
                         "selected_by_vlm": True,
                         "reason": selected.get('reason', '')
                     }
@@ -367,8 +422,14 @@ class ReferenceGeneratorAgent(AgentInterface):
         except Exception as e:
             logger.error(f"[{segment_id}] VLM选择最佳图片失败: {e}")
 
-        # 如果失败，返回第一个版本
-        return image_paths[0], {"score": 5, "issues": [], "selected_by_vlm": False}
+        # 如果失败，不要把未通过硬性校验的图片静默标记为可用。
+        return image_paths[0], {
+            "score": 0,
+            "hard_failures": ["VLM选择最佳图片失败，无法确认硬性标准"],
+            "issues": ["VLM选择最佳图片失败"],
+            "is_acceptable": False,
+            "selected_by_vlm": False,
+        }
 
     def _evaluate_with_vlm(self, image_path: str, segment: dict, plot: str, visual_prompt: str,
                           character_description: str = "", setting_description: str = "",
@@ -408,11 +469,21 @@ class ReferenceGeneratorAgent(AgentInterface):
             except:
                 pass
 
-            return {"score": 5, "issues": ["评估解析失败"], "is_acceptable": True}
+            return {
+                "score": 0,
+                "hard_failures": ["VLM评估解析失败，无法确认硬性标准"],
+                "issues": ["评估解析失败"],
+                "is_acceptable": False,
+            }
 
         except Exception as e:
             logger.warning(f"VLM evaluation failed: {e}")
-            return {"score": 5, "issues": [str(e)], "is_acceptable": True}
+            return {
+                "score": 0,
+                "hard_failures": ["VLM评估失败，无法确认硬性标准"],
+                "issues": [str(e)],
+                "is_acceptable": False,
+            }
 
     # ─── 构建最终 payload ───
 
@@ -583,8 +654,6 @@ class ReferenceGeneratorAgent(AgentInterface):
                     
                 fresh_segment_map = {s['segment_id']: s for s in fresh_segments}
 
-                llm = LLM()
-
                 selected_images = {}
                 prompt_map = {}  # segment_id → first_frame_prompt
 
@@ -600,11 +669,8 @@ class ReferenceGeneratorAgent(AgentInterface):
                     def calc_pct_regen(step: int) -> int:
                         return min(2 + int(98 * step / total_steps), 100)
 
-                    # 根据最新的 Segment 生成对应的 visual_prompt
-                    for i, segment_id in enumerate(regen_scenes):
+                    def regen_segment_run(segment_id: str, index: int):
                         seg = fresh_segment_map.get(segment_id, {})
-                        
-                        # 提取第一个分镜的剧情供首帧提示词使用（视频首帧应基于片段起点）
                         first_shot = seg.get('shots', [])[0] if seg.get('shots') else {}
                         plot = first_shot.get('content', '')
                         char_desc, set_desc = self._get_descriptions(seg, char_id_map, setting_id_map, character_json)
@@ -615,47 +681,56 @@ class ReferenceGeneratorAgent(AgentInterface):
                             logger.info(f"[{segment_id}] 重新生成时命中已有提示词，复用原提示词...")
                         else:
                             ff_prompt_tpl = load_prompt('reference', 'first_frame', 'zh' if is_zh else 'en')
-                            ff_prompt_resp = self._cancellable_query(
-                                llm,
-                                prompt=ff_prompt_tpl.format(
-                                    original_text=script_json.get("original_text", ""),
-                                    plot=plot,
-                                    character_description=char_desc,
-                                    setting_description=set_desc
-                                ),
-                                model=llm_model
-                            )
-                            if hasattr(ff_prompt_resp, 'content'):
-                                ff_prompt = ff_prompt_resp.content.strip()
-                            else:
-                                ff_prompt = str(ff_prompt_resp).strip()
-                                
-                        prompt_map[segment_id] = ff_prompt
-                        
-                        logger.info(f"[{segment_id}] first-frame prompt: {ff_prompt}...")
-                        self._report_progress("参考图", f"准备提示词: {segment_id}", calc_pct_regen(i * steps_per_segment + 1))
+                            try:
+                                local_llm = LLM()
+                                ff_prompt_resp = self._cancellable_query(
+                                    local_llm,
+                                    prompt=ff_prompt_tpl.format(
+                                        original_text=script_json.get("original_text", ""),
+                                        plot=plot,
+                                        character_description=char_desc,
+                                        setting_description=set_desc
+                                    ),
+                                    model=llm_model
+                                )
+                                if hasattr(ff_prompt_resp, 'content'):
+                                    ff_prompt = ff_prompt_resp.content.strip()
+                                else:
+                                    ff_prompt = str(ff_prompt_resp).strip()
+                            except Exception as e:
+                                logger.error(f"Error generating first-frame prompt for {segment_id}: {e}")
+                                ff_prompt = plot[:200]
 
-                    # 并发生成图像
+                        logger.info(f"[{segment_id}] first-frame prompt: {ff_prompt}...")
+                        self._report_progress("参考图", f"准备提示词: {segment_id}", calc_pct_regen(index * steps_per_segment + 1))
+
+                        refs = self._collect_refs(seg, asset_map, char_id_map, setting_id_map)
+                        char_desc, set_desc = self._get_descriptions(
+                            seg, char_id_map, setting_id_map, character_json
+                        )
+                        result_segment_id, result_path, eval_result = self._generate_one(
+                            img_client, sid,
+                            seg, ff_prompt, refs,
+                            style, it2i, t2i, video_ratio, resolution, vlm_model,
+                            character_description=char_desc, setting_description=set_desc
+                        )
+                        final_prompt = ff_prompt
+                        if isinstance(eval_result, dict):
+                            final_prompt = eval_result.get("final_visual_prompt") or ff_prompt
+                        return result_segment_id, result_path, eval_result, final_prompt
+
+                    # 并发生成提示词与图像
                     self._report_progress("参考图", "生成参考图...", calc_pct_regen(total * 2))
                     with ThreadPoolExecutor(max_workers=concurrency) as executor:
                         futs = {}
-                        for segment_id in regen_scenes:
-                            seg = fresh_segment_map.get(segment_id, {})
-                            refs = self._collect_refs(seg, asset_map, char_id_map, setting_id_map)
-                            char_desc, set_desc = self._get_descriptions(
-                                seg, char_id_map, setting_id_map, character_json
-                            )
-                            fut = executor.submit(
-                                self._generate_one, img_client, sid,
-                                seg, prompt_map[segment_id], refs,
-                                style, it2i, t2i, video_ratio, resolution, vlm_model,
-                                character_description=char_desc, setting_description=set_desc
-                            )
+                        for i, segment_id in enumerate(regen_scenes):
+                            fut = executor.submit(regen_segment_run, segment_id, i)
                             futs[fut] = segment_id
                         for fut in as_completed(futs):
                             segment_id_done = futs[fut]
                             try:
-                                _, result_path, eval_result = fut.result()
+                                _, result_path, eval_result, ff_prompt = fut.result()
+                                prompt_map[segment_id_done] = ff_prompt
                             except Exception as e:
                                 logger.error(f"Regen future error for {segment_id_done}: {e}")
                                 result_path = None
@@ -702,7 +777,6 @@ class ReferenceGeneratorAgent(AgentInterface):
         preview = self._build_preview(sid, segments, session_data)
         self._report_progress("参考图", "加载分镜列表", 8, data={"assets_preview": {"scenes": preview}})
 
-        llm = LLM()
         first_frame_prompts = {}  # 提升作用域，用于最后写回结果文件
         selected_images_map = {}  # 提升作用域，记录本轮新生成且 VLM 挑选出来的图片路径
 
@@ -740,14 +814,20 @@ class ReferenceGeneratorAgent(AgentInterface):
                 futs = {}
                 done = 0
                 
-                for i, seg in enumerate(pending_segments):
+                def segment_run(seg: dict, index: int):
                     segment_id = seg['segment_id']
-                    
-                    # 1. 准备该片段的视觉提示词（基于片段的第一个分镜）
+
+                    self._report_progress("参考图", f"正在启动: {segment_id}", calc_pct(index * steps_per_segment), data={
+                        "asset_complete": {
+                            "type": "scenes", "id": segment_id,
+                            "status": "running"
+                        }
+                    })
+
                     first_shot = seg.get('shots', [])[0] if seg.get('shots') else {}
                     plot = first_shot.get('content', '')
                     char_desc, set_desc = self._get_descriptions(seg, char_id_map, setting_id_map, character_json)
-                    
+
                     existing_vp = session_visual_prompts.get(segment_id)
                     if existing_vp:
                         ff_prompt = existing_vp
@@ -755,8 +835,9 @@ class ReferenceGeneratorAgent(AgentInterface):
                     else:
                         ff_prompt_tpl = load_prompt('reference', "first_frame", 'zh' if is_zh else 'en')
                         try:
+                            local_llm = LLM()
                             ff_prompt_resp = self._cancellable_query(
-                                llm,
+                                local_llm,
                                 prompt=ff_prompt_tpl.format(
                                     original_text=script_json.get("original_text", ""),
                                     plot=plot,
@@ -772,30 +853,26 @@ class ReferenceGeneratorAgent(AgentInterface):
                         except Exception as e:
                             logger.error(f"Error generating first-frame prompt for {segment_id}: {e}")
                             ff_prompt = plot[:200]
-                    
-                    first_frame_prompts[segment_id] = ff_prompt
+
                     logger.info(f"[{segment_id}] Prompt ready, starting image generation...")
 
-                    # 2. 发送任务开始状态 (Running)，以便前端 UI 立即显示加载状态
-                    self._report_progress("参考图", f"正在启动: {segment_id}", calc_pct(i * steps_per_segment), data={
-                        "asset_complete": {
-                            "type": "scenes", "id": segment_id,
-                            "status": "running"
-                        }
-                    })
-
-                    # 3. 立即提交图像生成任务，不再等待其他片段的提示词
                     refs = self._collect_refs(seg, asset_map, char_id_map, setting_id_map)
                     char_desc, set_desc = self._get_descriptions(seg, char_id_map, setting_id_map, character_json)
-                    fut = executor.submit(
-                        self._generate_one, img_client, sid,
+                    result_segment_id, result_path, eval_result = self._generate_one(
+                        img_client, sid,
                         seg, ff_prompt, refs,
                         style, it2i, t2i, video_ratio, resolution, vlm_model,
                         character_description=char_desc, setting_description=set_desc
                     )
+                    final_prompt = ff_prompt
+                    if isinstance(eval_result, dict):
+                        final_prompt = eval_result.get("final_visual_prompt") or ff_prompt
+                    return result_segment_id, result_path, eval_result, final_prompt
+
+                for i, seg in enumerate(pending_segments):
+                    segment_id = seg['segment_id']
+                    fut = executor.submit(segment_run, seg, i)
                     futs[fut] = segment_id
-                    
-                    # 报告进度（提交任务也算一点进度）
                     self._report_progress("参考图", f"等待生成: {segment_id}", calc_pct(i * steps_per_segment))
 
                 # 4. 等待所有任务完成
@@ -803,7 +880,8 @@ class ReferenceGeneratorAgent(AgentInterface):
                 for fut in as_completed(futs):
                     segment_id_done = futs[fut]
                     try:
-                        _, result_path, eval_result = fut.result()
+                        _, result_path, eval_result, ff_prompt = fut.result()
+                        first_frame_prompts[segment_id_done] = ff_prompt
                     except Exception as e:
                         logger.error(f"Image future error for {segment_id_done}: {e}")
                         result_path = None

@@ -10,7 +10,7 @@ import asyncio
 import logging
 from functools import partial
 from datetime import datetime, timezone
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, List
 
 from prompts.loader import load_prompt_with_fallback
 from .base_agent import AgentInterface
@@ -21,6 +21,9 @@ def _get_script_prompt(name: str, lang: str = "zh") -> str:
     return load_prompt_with_fallback("script", name, lang, "zh")
 
 class ScriptWriterAgent(AgentInterface):
+    MIN_EPISODE_LINES = 25
+    MAX_EPISODE_LINES = 30
+
     def __init__(self):
         super().__init__(name="ScriptWriter")
 
@@ -68,6 +71,65 @@ class ScriptWriterAgent(AgentInterface):
 
     def _save_progress(self, sid: str, phase: str, data: dict):
         pass
+
+    @classmethod
+    def _split_episode_blocks(cls, script_text: str) -> List[dict]:
+        episode_re = re.compile(
+            r"^\s*(?:#{1,6}\s*)?(?:\*\*)?\s*(?:第\s*(\d+)\s*集(?![-－])|Episode\s+(\d+)\b)",
+            re.IGNORECASE,
+        )
+        blocks: List[dict] = []
+        current = {"episode_number": 1, "lines": []}
+        seen_header = False
+
+        for line in script_text.splitlines():
+            match = episode_re.match(line.strip())
+            if match:
+                if seen_header and current["lines"]:
+                    blocks.append(current)
+                ep_no = int(match.group(1) or match.group(2) or len(blocks) + 1)
+                current = {"episode_number": ep_no, "lines": [line]}
+                seen_header = True
+            else:
+                current["lines"].append(line)
+
+        if current["lines"]:
+            blocks.append(current)
+        return blocks
+
+    @staticmethod
+    def _is_counted_script_line(line: str) -> bool:
+        text = line.strip()
+        if not text:
+            return False
+        if re.match(r"^\s*(?:#{1,6}\s*)?(?:\*\*)?\s*(?:第\s*\d+\s*集(?![-－])|Episode\s+\d+\b)", text, re.IGNORECASE):
+            return False
+        if re.match(r"^\s*(?:\*\*)?\s*(?:第\s*\d+\s*集[-－]第\s*\d+\s*场|\d+\s*[-－]\s*\d+\b)", text, re.IGNORECASE):
+            return False
+        if text.startswith("**") and text.endswith("**"):
+            return False
+        if re.match(r"^(人物|角色|Characters)\s*[:：]", text, re.IGNORECASE):
+            return False
+        return True
+
+    @classmethod
+    def _script_length_stats(cls, script_text: str) -> List[dict]:
+        stats: List[dict] = []
+        for block in cls._split_episode_blocks(script_text):
+            counted = [line for line in block["lines"] if cls._is_counted_script_line(line)]
+            stats.append({
+                "episode_number": block["episode_number"],
+                "line_count": len(counted),
+                "too_long": len(counted) > cls.MAX_EPISODE_LINES,
+            })
+        return stats
+
+    @classmethod
+    def _length_feedback(cls, stats: List[dict]) -> str:
+        return "\n".join(
+            f"- 第{item['episode_number']}集：{item['line_count']}行"
+            for item in stats
+        )
 
     async def process(self, input_data: Any, intervention: Optional[Dict] = None) -> Dict:
         if intervention and "modified_script" in intervention:
@@ -280,13 +342,39 @@ class ScriptWriterAgent(AgentInterface):
                 self._report_progress("剧本生成", msg, pct)
                 logger.info(f"[{pct}%] {msg}")
 
+            loop = asyncio.get_running_loop()
+
+            async def _trim_script_if_needed(script_text: str, phase: str) -> str:
+                trimmed = script_text
+                for attempt in range(2):
+                    stats = self._script_length_stats(trimmed)
+                    overlong = [item for item in stats if item.get("too_long")]
+                    if not overlong:
+                        return trimmed
+                    logger.warning(
+                        "[ScriptWriter] %s script is too long; trimming attempt=%d stats=%s",
+                        phase,
+                        attempt + 1,
+                        stats,
+                    )
+                    _log_progress(12 if phase == "初稿" else 45, f"{phase}篇幅超限，正在删减到每集{self.MAX_EPISODE_LINES}行以内...")
+                    trim_prompt = _get_script_prompt("trim_script", "zh" if is_zh else "en").format(
+                        script_text=trimmed,
+                        min_lines=self.MIN_EPISODE_LINES,
+                        max_lines=self.MAX_EPISODE_LINES,
+                        line_report=self._length_feedback(stats),
+                    )
+                    trimmed = await loop.run_in_executor(None, self._cancellable_query, llm, trim_prompt, [], llm_model, True, sid, web_search)
+                    logger.info("[ScriptWriter] Trimmed %s script generated (%d chars)", phase, len(trimmed))
+                return trimmed
+
             # 1. Generate full script
             _log_progress(10, "正在生成完整剧本文本初稿...")
             prompt = _get_script_prompt("generate_script", "zh" if is_zh else "en").format(idea=idea, style=style, episodes=episodes)
 
-            loop = asyncio.get_running_loop()
             full_script_text = await loop.run_in_executor(None, self._cancellable_query, llm, prompt, [], llm_model, True, sid, web_search)
             logger.info(f"[ScriptWriter] Initial script generated ({len(full_script_text)} chars)")
+            full_script_text = await _trim_script_if_needed(full_script_text, "初稿")
             
             _log_progress(20, "正在进行台词评估...")
             eval_dialogue_prompt = _get_script_prompt("eval_dialogue", "zh" if is_zh else "en").format(script_text=full_script_text)
@@ -301,9 +389,10 @@ class ScriptWriterAgent(AgentInterface):
                 script_text=full_script_text, 
                 dialogue_critique=dialogue_critique, 
                 plot_critique=plot_critique
-            ) + prompt  # 将原始生成提示词追加到优化提示词末尾，提供更多上下文信息帮助优化
+            )
             full_script_text = await loop.run_in_executor(None, self._cancellable_query, llm, revise_prompt, [], llm_model, True, sid, web_search)
             logger.info(f"[ScriptWriter] Final script generated ({len(full_script_text)} chars)")
+            full_script_text = await _trim_script_if_needed(full_script_text, "优化后")
 
             _log_progress(60, "最终剧本生成完成，正在提取人物/场景信息...")
 

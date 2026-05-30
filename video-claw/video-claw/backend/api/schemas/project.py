@@ -6,8 +6,9 @@ from pydantic import BaseModel
 class ProjectStartRequest(BaseModel):
     idea: str
     file_path: Optional[str] = None
-    style: Optional[str] = "realistic"
+    style: Optional[str] = None
     video_ratio: Optional[str] = "9:16"
+    video_resolution: Optional[str] = "720P"
     expand_idea: Optional[bool] = True
     llm_model: Optional[str] = None
     vlm_model: Optional[str] = None

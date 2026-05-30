@@ -200,3 +200,9 @@ export const VIDEO_RATIOS = [
     { id: '3:4', label: '3:4', ratio: '3:4' },
     { id: '21:9', label: '21:9', ratio: '21:9' },
 ];
+
+/* ─── 视频分辨率 ─── */
+export const VIDEO_RESOLUTIONS = [
+    { id: '720P', label: '720P' },
+    { id: '1080P', label: '1080P' },
+];

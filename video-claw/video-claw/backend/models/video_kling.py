@@ -99,6 +99,16 @@ class KlingVideoClient:
         # 使用强制 TLS 1.2 + 自动重试的 Session
         self._session = _build_session(proxy=Config.provider_proxy("kling"))
 
+    @staticmethod
+    def _resolve_mode(mode: str = "pro", resolution: Optional[str] = None) -> str:
+        """Map UI resolution to Kling's quality mode while preserving explicit mode as fallback."""
+        value = (resolution or "").strip().lower()
+        if value == "1080p":
+            return "pro"
+        if value == "720p":
+            return "std"
+        return mode if mode in {"std", "pro"} else "pro"
+
     # ─── JWT 鉴权 ───
 
     def _generate_token(self) -> str:
@@ -162,6 +172,8 @@ class KlingVideoClient:
         duration: str = "5",
         cfg_scale: float = 0.5,
         sound: str = "",
+        video_ratio: str = "16:9",
+        resolution: Optional[str] = None,
     ) -> str:
         """
         提交图生视频任务
@@ -175,6 +187,8 @@ class KlingVideoClient:
             duration: 视频时长，v3: "3"~"15", v2: "5"或"10"
             cfg_scale: 自由度 [0,1]，越大越贴合提示词
             sound: 是否生成声音 "on"/"off"
+            video_ratio: 输出画幅比例，按可灵 API 的 aspect_ratio 字段传递
+            resolution: UI 分辨率，720P 映射为 std，1080P 映射为 pro
 
         Returns:
             task_id: 任务 ID
@@ -194,6 +208,7 @@ class KlingVideoClient:
             # v2 系列仅支持 5 或 10
             clamped = str(min(max(int(duration), 5), 10))
 
+        mode = self._resolve_mode(mode, resolution)
         image_b64 = self._encode_image(image_path)
 
         body = {
@@ -202,6 +217,8 @@ class KlingVideoClient:
             "mode": mode,
             "duration": clamped,
         }
+        if video_ratio:
+            body["aspect_ratio"] = video_ratio
 
         # sound 参数处理
         # v3 / v2-6: 默认开启声音，除非显式 sound="off"
@@ -228,7 +245,7 @@ class KlingVideoClient:
         url = f"{self.base_url}/v1/videos/image2video"
         headers = self._auth_headers()
 
-        logger.info(f"KlingVideoClient: 提交任务 model={model_name}, mode={mode}, duration={clamped}s, sound={body.get('sound', 'off')}")
+        logger.info(f"KlingVideoClient: 提交任务 model={model_name}, mode={mode}, duration={clamped}s, aspect_ratio={body.get('aspect_ratio')}, sound={body.get('sound', 'off')}")
 
         resp = self._session.post(url, json=body, headers=headers, timeout=300)
         if not resp.ok:
@@ -336,6 +353,8 @@ class KlingVideoClient:
         cfg_scale: float = 0.5,
         negative_prompt: str = "",
         sound: str = "",
+        video_ratio: str = "16:9",
+        resolution: Optional[str] = None,
     ) -> str:
         """
         图生视频完整流程：提交任务 → 轮询等待 → 下载视频
@@ -350,6 +369,8 @@ class KlingVideoClient:
             cfg_scale: 自由度 [0,1]
             negative_prompt: 负向提示词
             sound: 是否生成声音 "on"/"off"
+            video_ratio: 输出画幅比例，按可灵 API 的 aspect_ratio 字段传递
+            resolution: UI 分辨率，720P 映射为 std，1080P 映射为 pro
 
         Returns:
             video_url: 远端视频 URL
@@ -364,6 +385,8 @@ class KlingVideoClient:
             duration=str(duration),
             cfg_scale=cfg_scale,
             sound=sound,
+            video_ratio=video_ratio,
+            resolution=resolution,
         )
 
         # 2. 轮询等待

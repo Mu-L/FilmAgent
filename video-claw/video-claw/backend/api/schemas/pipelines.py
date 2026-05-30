@@ -40,6 +40,7 @@ class ActionTransferPipelineRequest(BaseModel):
     video_model: str
     duration: int = 5
     video_ratio: str = "9:16"
+    video_resolution: Optional[str] = None
     resolution: Optional[str] = None
     negative_prompt: Optional[str] = None
     watermark: Optional[bool] = None
@@ -58,6 +59,7 @@ class DigitalHumanPipelineRequest(BaseModel):
     video_model: str
     duration: int = 5
     video_ratio: str = "9:16"
+    video_resolution: Optional[str] = None
     resolution: Optional[str] = None
     tts_voice: str = "zh-CN-YunjianNeural"
     tts_speed: float = 1.2

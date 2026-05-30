@@ -242,6 +242,7 @@ export async function startProject(params: {
   file_path?: string;
   style?: string;
   video_ratio?: string;
+  video_resolution?: string;
   llm_model?: string;
   vlm_model?: string;
   image_t2i_model?: string;
@@ -331,7 +332,7 @@ export async function stopProject(sessionId: string): Promise<{ status: string }
 
 export async function updateModels(
   sessionId: string,
-  models: Partial<Record<string, string>>,
+  models: Partial<Record<string, string | boolean>>,
 ): Promise<{ status: string }> {
   const resp = await fetch(`/api/project/${sessionId}/models`, {
     method: 'PATCH',

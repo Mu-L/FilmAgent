@@ -65,7 +65,8 @@ class VideoDirectorAgent(AgentInterface):
                       img_path: str, video_model: str,
                       duration: int = 10, sound: str = "",
                       shot_type: str = "multi",
-                      video_ratio: str = "16:9") -> tuple:
+                      video_ratio: str = "16:9",
+                      video_resolution: str = "720P") -> tuple:
         """生成单个视频片段，返回 (segment_id, path_or_None)"""
         if self.cancellation_check and self.cancellation_check():
             logger.info(f"VideoDirectorAgent: {segment_id} 跳过（用户取消）")
@@ -88,6 +89,7 @@ class VideoDirectorAgent(AgentInterface):
                 sound=sound,
                 shot_type=shot_type,
                 video_ratio=video_ratio,
+                resolution=video_resolution,
             )
             return segment_id, save_path
         except Exception as e:
@@ -269,6 +271,7 @@ class VideoDirectorAgent(AgentInterface):
         concurrency = get_max_concurrency(video_model, enable_concurrency)
         
         video_ratio = input_data.get("video_ratio", "16:9")
+        video_resolution = input_data.get("video_resolution", "720P")
         video_shot_type = input_data.get("video_shot_type", "multi")
         
         # 加载会话数据
@@ -336,7 +339,7 @@ class VideoDirectorAgent(AgentInterface):
                             fut = executor.submit(
                                 self._generate_one, sid, seg_id, prompt,
                                 img_path, video_model, duration,
-                                "", video_shot_type, video_ratio
+                                "", video_shot_type, video_ratio, video_resolution
                             )
                             futs[fut] = seg_id
                         for fut in as_completed(futs):
@@ -406,7 +409,7 @@ class VideoDirectorAgent(AgentInterface):
                     fut = executor.submit(
                         self._generate_one, sid, seg_id, prompt,
                         img_path, video_model, dur,
-                        "", video_shot_type, video_ratio
+                        "", video_shot_type, video_ratio, video_resolution
                     )
                     futs[fut] = seg_id
                 for fut in as_completed(futs):

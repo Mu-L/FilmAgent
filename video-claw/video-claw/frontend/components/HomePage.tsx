@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Play, Settings2, Clock, ArrowRight, Zap, CheckCircle, Trash2, X, Lock, Globe, ListOrdered, Upload, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import { PROMPT_EXAMPLES } from '@/config/examples';
-import { STYLES, VIDEO_RATIOS, LLM_PROVIDERS, T2I_PROVIDERS, I2I_PROVIDERS, VIDEO_PROVIDERS, VLM_PROVIDERS } from '@/config/models';
+import { STYLES, VIDEO_RATIOS, VIDEO_RESOLUTIONS, LLM_PROVIDERS, T2I_PROVIDERS, I2I_PROVIDERS, VIDEO_PROVIDERS, VLM_PROVIDERS } from '@/config/models';
 import { STAGES } from './TopBar';
 
 export interface ProjectParams {
@@ -12,6 +12,7 @@ export interface ProjectParams {
   file_path?: string; // 上传的文件路径 (由后端返回的文件名)
   style: string;
   video_ratio: string;
+  video_resolution: string;
   llm_model: string;
   vlm_model: string;
   image_t2i_model: string;
@@ -63,6 +64,7 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
   const [selectedI2I, setSelectedI2I] = useState('');
   const [selectedVideo, setSelectedVideo] = useState('');
   const [selectedRatio, setSelectedRatio] = useState('');
+  const [selectedResolution, setSelectedResolution] = useState('720P');
   const [configLoading, setConfigLoading] = useState(true);
   const [configError, setConfigError] = useState('');
   const [enableConcurrency, setEnableConcurrency] = useState(true);
@@ -80,7 +82,7 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState('');
   const [deleting, setDeleting] = useState(false);
-  const modelConfigReady = Boolean(selectedLLM && selectedVLM && selectedT2I && selectedI2I && selectedVideo && selectedRatio);
+  const modelConfigReady = Boolean(selectedLLM && selectedVLM && selectedT2I && selectedI2I && selectedVideo && selectedRatio && selectedResolution);
   const canStart = Boolean((idea.trim() || uploadedFile) && modelConfigReady && !configLoading);
 
   useEffect(() => {
@@ -93,16 +95,19 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
         if (!resp.ok) throw new Error('读取默认模型配置失败');
         const data = await resp.json();
         const models = data.config?.models || {};
+        const generation = data.config?.generation || {};
         if (!models.llm || !models.vlm || !models.image_t2i || !models.image_it2i || !models.video) {
           throw new Error('backend/config.yaml 缺少主流程默认模型');
         }
         if (cancelled) return;
+        setSelectedStyle(generation.style || 'realistic');
         setSelectedLLM(models.llm);
         setSelectedVLM(models.vlm);
         setSelectedT2I(models.image_t2i);
         setSelectedI2I(models.image_it2i);
         setSelectedVideo(models.video);
-        setSelectedRatio(models.video_ratio || '16:9');
+        setSelectedRatio(generation.video_ratio || '16:9');
+        setSelectedResolution(generation.video_resolution || '720P');
       } catch (e: any) {
         if (!cancelled) setConfigError(e.message || '读取默认模型配置失败');
       } finally {
@@ -134,6 +139,7 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
       file_path: uploadedFile?.path, // 如果上传了文件，传给后端
       style: selectedStyle,
       video_ratio: selectedRatio,
+      video_resolution: selectedResolution,
       llm_model: selectedLLM,
       vlm_model: selectedVLM,
       image_t2i_model: selectedT2I,
@@ -395,8 +401,8 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
 
           {/* 模型设置折叠面板 */}
           {showSettings && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-xl space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+            <div className="mt-4 p-4 bg-gray-50 rounded-xl space-y-4 text-xs">
+              <div className="grid grid-cols-1 gap-3">
                 <label className="flex flex-col gap-1">
                   <span className="text-gray-500 font-medium">风格</span>
                   <select
@@ -409,8 +415,23 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
                     ))}
                   </select>
                 </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1">
-                  <span className="text-gray-500 font-medium">视频比例</span>
+                  <span className="text-gray-500 font-medium">视频分辨率</span>
+                  <select
+                    value={selectedResolution}
+                    onChange={e => setSelectedResolution(e.target.value)}
+                    className="bg-white border border-gray-200 rounded-lg px-2.5 py-2 text-gray-700 outline-none min-h-[40px]"
+                  >
+                    {VIDEO_RESOLUTIONS.map(item => (
+                      <option key={item.id} value={item.id}>{item.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-gray-500 font-medium">视频长宽比</span>
                   <div className="flex gap-1">
                     {VIDEO_RATIOS.map(r => (
                       <button
@@ -445,6 +466,14 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
                     ))}
                   </div>
                 </label>
+              </div>
+
+              <div className="space-y-3 border-t border-gray-200/70 pt-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500 font-semibold">模型配置</span>
+                  <span className="text-[10px] text-gray-400">用于主流程各阶段调用</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1">
                   <span className="text-gray-500 font-medium">LLM 模型</span>
                   <select
@@ -534,6 +563,7 @@ export default function HomePage({ onStartProject, onResumeProject, onDeleteSess
                   />
                   <span className="text-gray-600">并发生成</span>
                 </label>
+                </div>
               </div>
             </div>
           )}

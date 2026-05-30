@@ -204,7 +204,7 @@ export default function WorkflowPanel() {
         setHistory(
           sessions.map((s: any) => ({
             id: s.id,
-            idea: (s.idea || 'Untitled').slice(0, 60),
+            idea: (s.title || s.idea || 'Untitled').slice(0, 60),
             style: s.style || '',
             date: s.date
               ? new Date(s.date * 1000).toLocaleDateString('zh-CN')
@@ -458,6 +458,7 @@ export default function WorkflowPanel() {
         file_path: params.file_path, // 修复：将上传的文件路径传给后端
         style: params.style,
         video_ratio: params.video_ratio,
+        video_resolution: params.video_resolution,
         llm_model: params.llm_model,
         vlm_model: params.vlm_model,
         image_t2i_model: params.image_t2i_model,
@@ -488,6 +489,7 @@ export default function WorkflowPanel() {
         session_id: result.session_id,
         style: params.style,
         video_ratio: params.video_ratio,
+        video_resolution: params.video_resolution,
         llm_model: params.llm_model,
         vlm_model: params.vlm_model,
         image_t2i_model: params.image_t2i_model,
@@ -577,6 +579,7 @@ export default function WorkflowPanel() {
           image_it2i_model: projectParams?.image_it2i_model,
           video_model: projectParams?.video_model,
           video_ratio: projectParams?.video_ratio,
+          video_resolution: projectParams?.video_resolution,
           video_sound: videoSound,
           video_shot_type: videoShotType,
         };
@@ -665,6 +668,7 @@ export default function WorkflowPanel() {
       session_id: sessionId,
       style: projectParams?.style,
       video_ratio: projectParams?.video_ratio,
+      video_resolution: projectParams?.video_resolution,
       llm_model: projectParams?.llm_model,
       vlm_model: projectParams?.vlm_model,
       image_t2i_model: projectParams?.image_t2i_model,
@@ -948,7 +952,8 @@ export default function WorkflowPanel() {
         image_t2i_model: projectParams?.image_t2i_model,
         image_it2i_model: projectParams?.image_it2i_model,
         video_model: projectParams?.video_model,
-            video_ratio: projectParams?.video_ratio,
+        video_ratio: projectParams?.video_ratio,
+        video_resolution: projectParams?.video_resolution,
       };
 
       // 尝试获取场景数
@@ -1047,6 +1052,7 @@ export default function WorkflowPanel() {
           idea: s.idea || '',
           style: s.style || '',
           video_ratio: s.video_ratio || '16:9',
+          video_resolution: s.video_resolution || '720P',
           llm_model: s.llm_model || '',
           vlm_model: s.vlm_model || '',
           image_t2i_model: s.image_t2i_model || '',
@@ -1114,6 +1120,7 @@ export default function WorkflowPanel() {
         image_it2i_model: projectParams.image_it2i_model,
         video_model: projectParams.video_model,
         video_ratio: projectParams.video_ratio,
+        video_resolution: projectParams.video_resolution || '720P',
         enable_concurrency: projectParams.enable_concurrency || false,
         // web_search: projectParams.web_search || false,
         // expand_idea: projectParams.expand_idea || false,

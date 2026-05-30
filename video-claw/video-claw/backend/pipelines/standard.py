@@ -231,6 +231,7 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
     video_mode = params.get("video_mode") or "image_concat"
     dynamic_video = video_mode == "dynamic_video" or bool(params.get("generate_videos", False))
     video_model = params.get("video_model")
+    video_resolution = params.get("video_resolution") or params.get("resolution") or "720P"
     if (dynamic_video or template_video_mode) and not video_model:
         raise ValueError("standard pipeline video generation requires video_model")
     video_duration = clamp_segment_count(params.get("video_duration") or params.get("duration") or 5, default=5)
@@ -351,6 +352,7 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
                     image_path=image_path,
                     duration=max(video_duration, int(duration + 0.999)),
                     video_ratio=media_video_ratio,
+                    video_resolution=video_resolution,
                 )
                 storyboard["frames"][idx - 1]["template_media_video_path"] = media_video_path
 
@@ -418,6 +420,7 @@ async def run(task_id: str, params: dict) -> tuple[dict, list[dict]]:
                 image_path=clip_image_path,
                 duration=max(video_duration, int(duration + 0.999)),
                 video_ratio=video_ratio,
+                video_resolution=video_resolution,
             )
             motion_artifact = artifact(video_only_segment_path, "video", f"video_{idx:02d}_motion")
             artifacts.append(motion_artifact)

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Clapperboard, Clock, Hexagon, Home, Loader2, PanelLeftOpen, Repeat2, Settings, Trash2, UserRound } from 'lucide-react';
 import clsx from 'clsx';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { clearTempCache, fetchPipelineTasks, fetchSandboxTasks, fetchSessions, type PipelineTask, type SandboxTask } from '@/lib/workflowApi';
 
 const NAV_ITEMS = [
@@ -203,7 +203,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
+    <div
+      className="min-h-screen bg-gray-50 text-gray-800"
+      style={{ '--app-sidebar-width': open ? '15rem' : '0px' } as CSSProperties}
+    >
       <aside
         className={clsx(
           'fixed inset-y-0 left-0 z-40 border-r border-gray-200 bg-white shadow-sm transition-all duration-300',
