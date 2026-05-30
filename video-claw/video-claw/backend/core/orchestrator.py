@@ -111,6 +111,7 @@ class WorkflowState:
         self.started_at: Optional[datetime] = None
         self.updated_at: datetime = datetime.now()
         self.meta: Dict[str, Any] = {}
+        self.stage_progress: Dict[str, Dict[str, Any]] = {}
 
     def to_dict(self) -> Dict:
         return {
@@ -120,6 +121,7 @@ class WorkflowState:
             "error": self.error,
             "artifacts": self.artifacts,
             "meta": self.meta,
+            "stage_progress": self.stage_progress,
             "updated_at": self.updated_at,
         }
 
@@ -186,6 +188,7 @@ class WorkflowEngine:
                     state.status = loaded_status
 
                 state.artifacts = data.get('artifacts', {})
+                state.stage_progress = data.get('stage_progress', {})
                 state.meta = _extract_session_meta(data)
                 state.updated_at = data.get('updated_at', 0)
 
@@ -211,6 +214,13 @@ class WorkflowEngine:
             state.status[state.current_stage.value] = "stopped"
             state.error = None  # 清除错误，因为是主动停止
             state.updated_at = datetime.now()
+            current_progress = state.stage_progress.get(state.current_stage.value, {})
+            state.stage_progress[state.current_stage.value] = {
+                **current_progress,
+                "step": "已停止",
+                "message": "已停止",
+                "updated_at": time.time(),
+            }
             self.save_session_to_disk(session_id)
         logger.info(f"Session {session_id} stop signal sent")
 
@@ -464,9 +474,68 @@ class WorkflowEngine:
 
         # 包装 progress_callback，定期保存状态到 sessions json
         last_save_time = {"time": 0}
-        SAVE_INTERVAL = 10  # 每10秒保存一次
+        SAVE_INTERVAL = 2  # 进度快照最多每2秒落盘一次，刷新页面后可恢复进度条
+
+        def persist_stage_progress(phase: str, step: str, percent: float):
+            stage_key = stage.value
+            try:
+                safe_percent = max(0, min(100, int(round(float(percent)))))
+            except (TypeError, ValueError):
+                safe_percent = 0
+            message = f"{phase}: {step}" if phase and step else (step or phase or "")
+            state.stage_progress[stage_key] = {
+                "phase": phase,
+                "step": step,
+                "message": message,
+                "percent": safe_percent,
+                "updated_at": time.time(),
+            }
+            state.updated_at = datetime.now()
+
+        def merge_progress_artifact(data: dict):
+            if not isinstance(data, dict):
+                return
+            stage_key = stage.value
+            if data.get("assets_preview"):
+                state.artifacts[stage_key] = copy.deepcopy(data["assets_preview"])
+
+            asset_update = data.get("asset_complete")
+            if not isinstance(asset_update, dict):
+                return
+
+            artifact = state.artifacts.setdefault(stage_key, {})
+            item_type = asset_update.get("type")
+            item_id = asset_update.get("id")
+            if not item_type or not item_id:
+                return
+
+            items = artifact.setdefault(item_type, [])
+            if not isinstance(items, list):
+                items = []
+                artifact[item_type] = items
+
+            for item in items:
+                if isinstance(item, dict) and item.get("id") == item_id:
+                    item["status"] = asset_update.get("status", item.get("status"))
+                    if "selected" in asset_update:
+                        item["selected"] = asset_update.get("selected") or item.get("selected", "")
+                    if "versions" in asset_update:
+                        item["versions"] = asset_update.get("versions") or item.get("versions", [])
+                    return
+
+            items.append({
+                "id": item_id,
+                "status": asset_update.get("status", "done"),
+                "selected": asset_update.get("selected", ""),
+                "versions": asset_update.get("versions", []),
+            })
 
         def wrapped_progress_callback(phase: str, step: str, percent: float, data: dict = None):
+            persist_stage_progress(phase, step, percent)
+
+            if data:
+                merge_progress_artifact(data)
+
             # 调用原始 callback
             if progress_callback:
                 progress_callback(phase, step, percent, data)
@@ -489,6 +558,14 @@ class WorkflowEngine:
         state.current_stage = stage
         state.status[stage.value] = "running"
         state.updated_at = datetime.now()
+        state.stage_progress[stage.value] = {
+            "phase": stage.value,
+            "step": "启动中...",
+            "message": "启动中...",
+            "percent": 0,
+            "updated_at": time.time(),
+        }
+        self.save_session_to_disk(state.session_id)
 
         try:
             result = await agent.process(input_data, intervention=intervention)
@@ -534,6 +611,13 @@ class WorkflowEngine:
                 state.status[stage.value] = "waiting"
 
             state.updated_at = datetime.now()
+            state.stage_progress[stage.value] = {
+                "phase": stage.value,
+                "step": "等待确认" if state.status.get(stage.value) == "waiting" else "已完成",
+                "message": "等待确认" if state.status.get(stage.value) == "waiting" else "已完成",
+                "percent": 100,
+                "updated_at": time.time(),
+            }
             # 立即保存状态到磁盘，确保前端能获取到最新状态
             self.save_session_to_disk(state.session_id)
             return result
@@ -542,6 +626,13 @@ class WorkflowEngine:
             state.status[stage.value] = "error"
             state.error = str(e)
             state.updated_at = datetime.now()
+            state.stage_progress[stage.value] = {
+                "phase": stage.value,
+                "step": "执行失败",
+                "message": "执行失败",
+                "percent": state.stage_progress.get(stage.value, {}).get("percent", 0),
+                "updated_at": time.time(),
+            }
             # 确保保存错误状态
             self.save_session_to_disk(state.session_id)
             raise
@@ -651,6 +742,7 @@ class WorkflowEngine:
             data["status"] = state.status
             # 这里的 state.artifacts 应该是已经经过 _sync_artifacts_cross_stages 处理的最新的内存对象
             data["artifacts"] = state.artifacts
+            data["stage_progress"] = state.stage_progress
             data["error"] = state.error
             data["updated_at"] = state.updated_at.timestamp() if isinstance(state.updated_at, datetime) else time.time()
             
@@ -715,6 +807,7 @@ class WorkflowEngine:
                     state.status = old_status
 
                 state.artifacts = data.get("artifacts", {})
+                state.stage_progress = data.get("stage_progress", {})
                 state.error = data.get("error")
                 state.updated_at = data.get("updated_at", 0)
                 state.meta = _extract_session_meta(data)

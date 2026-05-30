@@ -662,12 +662,9 @@ class ReferenceGeneratorAgent(AgentInterface):
                     done = 0
                     nonlocal selected_images
                     nonlocal prompt_map
-                    # 每片段5个步骤：准备(1)、生成(3)、完成(1)
-                    steps_per_segment = 5
-                    total_steps = total * steps_per_segment
 
-                    def calc_pct_regen(step: int) -> int:
-                        return min(2 + int(98 * step / total_steps), 100)
+                    def calc_pct_regen(completed: int) -> int:
+                        return min(95, 5 + int(90 * completed / max(total, 1)))
 
                     def regen_segment_run(segment_id: str, index: int):
                         seg = fresh_segment_map.get(segment_id, {})
@@ -702,7 +699,12 @@ class ReferenceGeneratorAgent(AgentInterface):
                                 ff_prompt = plot[:200]
 
                         logger.info(f"[{segment_id}] first-frame prompt: {ff_prompt}...")
-                        self._report_progress("参考图", f"准备提示词: {segment_id}", calc_pct_regen(index * steps_per_segment + 1))
+                        self._report_progress("参考图", f"正在生成: {segment_id}", 5, data={
+                            "asset_complete": {
+                                "type": "scenes", "id": segment_id,
+                                "status": "running"
+                            }
+                        })
 
                         refs = self._collect_refs(seg, asset_map, char_id_map, setting_id_map)
                         char_desc, set_desc = self._get_descriptions(
@@ -720,7 +722,7 @@ class ReferenceGeneratorAgent(AgentInterface):
                         return result_segment_id, result_path, eval_result, final_prompt
 
                     # 并发生成提示词与图像
-                    self._report_progress("参考图", "生成参考图...", calc_pct_regen(total * 2))
+                    self._report_progress("参考图", f"生成参考图... 0/{total}", 5)
                     with ThreadPoolExecutor(max_workers=concurrency) as executor:
                         futs = {}
                         for i, segment_id in enumerate(regen_scenes):
@@ -735,8 +737,7 @@ class ReferenceGeneratorAgent(AgentInterface):
                                 logger.error(f"Regen future error for {segment_id_done}: {e}")
                                 result_path = None
                             done += 1
-                            step = done * steps_per_segment
-                            pct = calc_pct_regen(step)
+                            pct = calc_pct_regen(done)
                             if result_path:
                                 selected_images[segment_id_done] = result_path
                                 versions = self._list_versions(sid, segment_id_done)
@@ -797,18 +798,15 @@ class ReferenceGeneratorAgent(AgentInterface):
                 return
 
             total = len(pending_segments)
-            # 每分镜5个步骤：准备(1)、生成(3)、完成(1)
-            steps_per_segment = 5
-            total_steps = total * steps_per_segment + 1  # +1 是加载数据步骤
 
-            def calc_pct(step: int) -> int:
-                """根据步骤计算进度百分比"""
-                return min(2 + int(98 * step / total_steps), 100)
+            def calc_pct(completed: int) -> int:
+                """并发阶段只按完成数量推进，避免提交任务时进度虚高。"""
+                return min(95, 10 + int(85 * completed / max(total, 1)))
 
             done = 0
 
             # 步骤2-6(每片段)：流式生成提示词并立即开始图像生成
-            self._report_progress("参考图", "开始生成...", calc_pct(0))
+            self._report_progress("参考图", f"开始生成... 0/{total}", calc_pct(0))
             
             with ThreadPoolExecutor(max_workers=concurrency) as executor:
                 futs = {}
@@ -817,7 +815,7 @@ class ReferenceGeneratorAgent(AgentInterface):
                 def segment_run(seg: dict, index: int):
                     segment_id = seg['segment_id']
 
-                    self._report_progress("参考图", f"正在启动: {segment_id}", calc_pct(index * steps_per_segment), data={
+                    self._report_progress("参考图", f"正在生成: {segment_id}", calc_pct(done), data={
                         "asset_complete": {
                             "type": "scenes", "id": segment_id,
                             "status": "running"
@@ -873,7 +871,6 @@ class ReferenceGeneratorAgent(AgentInterface):
                     segment_id = seg['segment_id']
                     fut = executor.submit(segment_run, seg, i)
                     futs[fut] = segment_id
-                    self._report_progress("参考图", f"等待生成: {segment_id}", calc_pct(i * steps_per_segment))
 
                 # 4. 等待所有任务完成
                 cancelled = False
@@ -887,8 +884,7 @@ class ReferenceGeneratorAgent(AgentInterface):
                         result_path = None
                     
                     done += 1
-                    step = done * steps_per_segment
-                    pct = calc_pct(step)
+                    pct = calc_pct(done)
                     
                     if result_path:
                         selected_images_map[segment_id_done] = result_path

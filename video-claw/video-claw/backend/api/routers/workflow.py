@@ -37,6 +37,16 @@ def _require_model_fields(values: dict) -> None:
         )
 
 
+def _session_file_path(session_id: str) -> str:
+    session_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        'code',
+        'data',
+        'sessions',
+    )
+    return os.path.join(session_dir, f"{session_id}.json")
+
+
 @router.post("/api/project/start")
 async def start_project(req: ProjectStartRequest):
     final_idea = merge_uploaded_file_into_idea(req.idea, req.file_path)
@@ -140,8 +150,7 @@ async def get_project_status(session_id: str):
 
 @router.get("/api/project/{session_id}/status/from_disk")
 async def get_project_status_from_disk(session_id: str):
-    session_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'code', 'data', 'sessions')
-    session_file = os.path.join(session_dir, f"{session_id}.json")
+    session_file = _session_file_path(session_id)
     if not os.path.exists(session_file):
         raise HTTPException(404, "Session not found")
     with open(session_file, 'r', encoding='utf-8') as f:
@@ -153,6 +162,19 @@ async def get_artifact(session_id: str, stage: str):
     state = workflow_engine.get_state(session_id)
     if not state:
         raise HTTPException(404, "Session not found")
+
+    session_file = _session_file_path(session_id)
+    if os.path.exists(session_file):
+        try:
+            with open(session_file, 'r', encoding='utf-8') as f:
+                disk_data = json.load(f)
+            disk_artifact = disk_data.get("artifacts", {}).get(stage)
+            if disk_artifact is not None:
+                state.artifacts[stage] = disk_artifact
+                return {"stage": stage, "artifact": disk_artifact}
+        except Exception:
+            pass
+
     artifact = state.artifacts.get(stage)
     if artifact is None:
         raise HTTPException(404, f"Artifact for stage '{stage}' not found")

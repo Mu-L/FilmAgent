@@ -59,6 +59,7 @@ def build_openclaw_message(stage: str, result: Dict[str, Any]) -> str:
 def make_progress_channel():
     progress_events = queue.Queue()
     event_trigger = asyncio.Event()
+    loop = asyncio.get_running_loop()
 
     def progress_callback(phase, step, percent, data=None):
         event = {"phase": phase, "step": step, "percent": percent}
@@ -66,7 +67,6 @@ def make_progress_channel():
             event["data"] = data
         progress_events.put(event)
         try:
-            loop = asyncio.get_running_loop()
             loop.call_soon_threadsafe(event_trigger.set)
         except RuntimeError:
             pass

@@ -11,7 +11,7 @@ import json
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Optional, Dict, List, Tuple
+from typing import Any, Optional, Callable, Dict, List, Tuple
 
 from .base_agent import AgentInterface
 
@@ -145,7 +145,7 @@ class StoryboardAgent(AgentInterface):
         return setting_names[0] if setting_names else ""
 
     @classmethod
-    def _parse_scene_header(cls, line: str, setting_names: List[str]) -> Optional[str]:
+    def _parse_scene_header_parts(cls, line: str, setting_names: List[str]) -> Optional[dict]:
         clean = cls._strip_markup(line)
         if not clean:
             return None
@@ -154,19 +154,38 @@ class StoryboardAgent(AgentInterface):
         # **第1集-第1场 日 内 高二三班教室**
         # **1-1 夜 内 锐创科技办公室**
         header_patterns = [
-            r"^第\d+集\s*[-—]\s*第\d+场\s+(?:日|夜|晨|傍晚|深夜)\s+(?:内|外)\s+(.+)$",
-            r"^\d+\s*[-—_]\s*\d+\s+(?:日|夜|晨|傍晚|深夜)\s+(?:内|外)\s+(.+)$",
+            r"^第\d+集\s*[-—]\s*第\d+场\s+(日|夜|晨|傍晚|深夜)\s+(内|外)\s+(.+)$",
+            r"^\d+\s*[-—_]\s*\d+\s+(日|夜|晨|傍晚|深夜)\s+(内|外)\s+(.+)$",
         ]
         for pattern in header_patterns:
             match = re.match(pattern, clean, flags=re.I)
             if not match:
                 continue
-            candidate = match.group(1).strip()
+            time_of_day = match.group(1).strip()
+            scene_space = match.group(2).strip()
+            candidate = match.group(3).strip()
             for name in setting_names:
                 if cls._setting_matches_text(name, candidate):
-                    return name
-            return candidate[:40] or clean[:40]
+                    return {
+                        "location": name,
+                        "scene_time": time_of_day,
+                        "scene_space": scene_space,
+                        "scene_context": clean,
+                    }
+            return {
+                "location": candidate[:40] or clean[:40],
+                "scene_time": time_of_day,
+                "scene_space": scene_space,
+                "scene_context": clean,
+            }
         return None
+
+    @classmethod
+    def _parse_scene_header(cls, line: str, setting_names: List[str]) -> Optional[str]:
+        parts = cls._parse_scene_header_parts(line, setting_names)
+        if not parts:
+            return None
+        return parts.get("location")
 
     @staticmethod
     def _is_metadata_line(line: str) -> bool:
@@ -227,6 +246,9 @@ class StoryboardAgent(AgentInterface):
         annotated_lines: List[str] = []
         units: List[dict] = []
         current_location = setting_names[0] if setting_names else ""
+        current_scene_time = ""
+        current_scene_space = ""
+        current_scene_context = ""
         scene_characters: List[str] = []
         scene_key = 0
 
@@ -239,10 +261,13 @@ class StoryboardAgent(AgentInterface):
                 annotated_lines.append(line)
                 continue
 
-            header_location = cls._parse_scene_header(stripped, setting_names)
-            if header_location:
+            header_parts = cls._parse_scene_header_parts(stripped, setting_names)
+            if header_parts:
                 scene_key += 1
-                current_location = header_location
+                current_location = header_parts.get("location", current_location)
+                current_scene_time = header_parts.get("scene_time", "")
+                current_scene_space = header_parts.get("scene_space", "")
+                current_scene_context = header_parts.get("scene_context", cls._strip_markup(stripped))
                 scene_characters = cls._match_characters(line, character_names)
                 annotated_lines.append(cls._strip_markup(stripped))
                 continue
@@ -283,6 +308,9 @@ class StoryboardAgent(AgentInterface):
                 "scene_characters": scene_characters[:],
                 "scene_key": scene_key,
                 "location": cls._resolve_location(line, current_location, setting_names),
+                "scene_time": current_scene_time,
+                "scene_space": current_scene_space,
+                "scene_context": current_scene_context,
                 "is_entry": cls._is_entry_action(line, character_names),
             })
             annotated_lines.append(f"[{duration}秒][{unit_id}] {line}")
@@ -300,6 +328,9 @@ class StoryboardAgent(AgentInterface):
             "episode_number": ep_n,
             "segment_number": segment_number,
             "location": items[0].get("location", "") if items else "",
+            "scene_time": items[0].get("scene_time", "") if items else "",
+            "scene_space": items[0].get("scene_space", "") if items else "",
+            "scene_context": items[0].get("scene_context", "") if items else "",
             "characters": characters,
             "total_duration": sum(int(item.get("duration") or 0) for item in items),
             "items": items,
@@ -395,6 +426,7 @@ class StoryboardAgent(AgentInterface):
                 "text": item["text"],
                 "characters": item.get("characters", []),
                 "is_entry": item.get("is_entry", False),
+                "scene_context": item.get("scene_context", ""),
             }
             for item in items
         ]
@@ -447,6 +479,9 @@ class StoryboardAgent(AgentInterface):
             episode_title=ep_t,
             segment_number=plan.get("segment_number"),
             location=plan.get("location", ""),
+            scene_time=plan.get("scene_time", ""),
+            scene_space=plan.get("scene_space", ""),
+            scene_context=plan.get("scene_context", ""),
             characters=json.dumps(plan.get("characters", []), ensure_ascii=False),
             total_duration=output_total,
             items=json.dumps(items_payload, ensure_ascii=False),
@@ -600,6 +635,9 @@ class StoryboardAgent(AgentInterface):
             plan.get("location", ""),
             shots,
             characters,
+            plan.get("scene_time", ""),
+            plan.get("scene_space", ""),
+            plan.get("scene_context", ""),
         )
 
     @classmethod
@@ -631,7 +669,129 @@ class StoryboardAgent(AgentInterface):
             plan.get("location", ""),
             shots,
             characters,
+            plan.get("scene_time", ""),
+            plan.get("scene_space", ""),
+            plan.get("scene_context", ""),
         )
+
+    @staticmethod
+    def _staging_continuity_payload(segments: List[dict]) -> List[dict]:
+        payload: List[dict] = []
+        for seg in segments:
+            payload.append({
+                "segment_number": seg.get("segment_number"),
+                "location": seg.get("location", ""),
+                "scene_context": seg.get("scene_context", ""),
+                "scene_space": seg.get("scene_space", ""),
+                "characters": seg.get("characters", []),
+                "shots": [
+                    {
+                        "shot_number": shot.get("shot_number"),
+                        "shot_type": shot.get("shot_type", ""),
+                        "content": shot.get("content", ""),
+                    }
+                    for shot in seg.get("shots", [])
+                    if isinstance(shot, dict)
+                ],
+            })
+        return payload
+
+    @classmethod
+    def _build_staging_continuity_prompt(
+        cls,
+        ep_n: int,
+        ep_t: str,
+        segments: List[dict],
+        retry_error: str = "",
+    ) -> str:
+        template = _get_storyboard_prompt("staging_continuity", "zh")
+        retry_feedback = ""
+        if retry_error:
+            retry_feedback = f"上一次输出未通过校验，错误原因：{retry_error}\n请根据这个错误修正输出。"
+        from prompts.loader import format_prompt
+        return format_prompt(
+            template,
+            episode_number=ep_n,
+            episode_title=ep_t,
+            segments=json.dumps(cls._staging_continuity_payload(segments), ensure_ascii=False, indent=2),
+            retry_feedback=retry_feedback,
+        )
+
+    @staticmethod
+    def _apply_staging_continuity_patches(segments: List[dict], review: dict) -> int:
+        patches = review.get("patches") if isinstance(review, dict) else None
+        if not isinstance(patches, list):
+            raise ValueError("站位连续性检查输出缺少 patches 数组")
+
+        segment_by_number = {
+            int(seg.get("segment_number") or 0): seg
+            for seg in segments
+            if isinstance(seg, dict)
+        }
+        updates: List[Tuple[dict, str]] = []
+        for patch in patches:
+            if not isinstance(patch, dict):
+                raise ValueError("站位连续性补丁包含非对象元素")
+            try:
+                segment_number = int(patch.get("segment_number"))
+                shot_number = int(patch.get("shot_number"))
+            except (TypeError, ValueError):
+                raise ValueError(f"站位连续性补丁编号无效: {patch}")
+            content = str(patch.get("content") or "").strip()
+            if not content:
+                raise ValueError(f"站位连续性补丁 content 为空: {patch}")
+
+            seg = segment_by_number.get(segment_number)
+            if not seg:
+                raise ValueError(f"站位连续性补丁引用未知片段: {segment_number}")
+            shot = next(
+                (item for item in seg.get("shots", []) if int(item.get("shot_number") or 0) == shot_number),
+                None,
+            )
+            if not shot:
+                raise ValueError(f"站位连续性补丁引用未知分镜: segment={segment_number}, shot={shot_number}")
+            updates.append((shot, content))
+
+        for shot, content in updates:
+            shot["content"] = content
+        return len(updates)
+
+    async def _fix_episode_staging_continuity(
+        self,
+        ep_n: int,
+        ep_t: str,
+        segments: List[dict],
+        llm_model: str,
+        sid: str,
+    ) -> List[dict]:
+        last_error: Optional[Exception] = None
+        for attempt in range(2):
+            try:
+                prompt = self._build_staging_continuity_prompt(
+                    ep_n,
+                    ep_t,
+                    segments,
+                    retry_error=str(last_error) if last_error else "",
+                )
+                review = await self._query_json_object_with_retries(
+                    prompt,
+                    llm_model,
+                    sid,
+                    label=f"第 {ep_n} 集人物站位连续性检查",
+                    max_retries=1,
+                )
+                applied = self._apply_staging_continuity_patches(segments, review)
+                issues = review.get("issues") if isinstance(review, dict) else []
+                if applied:
+                    logger.info("[Storyboard] Episode %s staging continuity fixed %d shots. issues=%s", ep_n, applied, issues)
+                else:
+                    logger.info("[Storyboard] Episode %s staging continuity passed.", ep_n)
+                return segments
+            except Exception as exc:
+                last_error = exc
+                logger.warning("[Storyboard] Episode %s staging continuity attempt %d failed: %s", ep_n, attempt + 1, exc)
+        logger.warning("[Storyboard] Episode %s staging continuity check skipped after retries: %s", ep_n, last_error)
+        return segments
 
     async def _plan_episode_segments(
         self,
@@ -725,23 +885,32 @@ class StoryboardAgent(AgentInterface):
         style: str,
         llm_model: str,
         sid: str,
+        progress_note: Optional[Callable[[str], None]] = None,
     ) -> List[dict]:
         annotated_script, units = self._annotate_episode_script(ep_c, characters, settings)
         if not units:
             raise Exception(f"第 {ep_n} 集未能识别出动作或台词")
 
-        self._report_progress("分镜", f"第 {ep_n} 集已完成动作/台词时长标注，共 {len(units)} 项", 20)
+        logger.info("[Storyboard] Episode %s annotated %d script units", ep_n, len(units))
+        if progress_note:
+            progress_note(f"第 {ep_n} 集已完成时长标注，正在划分片段")
         plans = await self._plan_episode_segments(ep_n, ep_t, annotated_script, units, characters, settings, llm_model, sid)
         if not plans:
             raise Exception(f"第 {ep_n} 集片段规划失败")
 
-        self._report_progress("分镜", f"第 {ep_n} 集已规划 {len(plans)} 个片段，开始并行设计分镜", 35)
+        logger.info("[Storyboard] Episode %s planned %d segments; designing in parallel", ep_n, len(plans))
+        if progress_note:
+            progress_note(f"第 {ep_n} 集已规划 {len(plans)} 个片段，正在设计分镜")
         tasks = [
             self._design_one_segment(ep_n, ep_t, plan, style, llm_model, sid)
             for plan in plans
         ]
         segments = await asyncio.gather(*tasks)
         segments.sort(key=lambda item: int(item.get("segment_number") or 0))
+        logger.info("[Storyboard] Episode %s checking staging continuity", ep_n)
+        if progress_note:
+            progress_note(f"第 {ep_n} 集正在检查人物站位连续性")
+        segments = await self._fix_episode_staging_continuity(ep_n, ep_t, segments, llm_model, sid)
         return segments
 
     @classmethod
@@ -806,6 +975,9 @@ class StoryboardAgent(AgentInterface):
         location: str,
         shots: List[dict],
         characters: List[str],
+        scene_time: str = "",
+        scene_space: str = "",
+        scene_context: str = "",
     ) -> dict:
         for idx, shot in enumerate(shots, 1):
             shot["shot_number"] = idx
@@ -815,7 +987,7 @@ class StoryboardAgent(AgentInterface):
             )
         cls._normalize_first_shot_type(shots)
         total_duration = cls._ensure_segment_duration(shots)
-        return {
+        segment = {
             "segment_id": f"seg_{ep_n:02d}_{segment_number:02d}",
             "segment_number": segment_number,
             "total_duration": total_duration,
@@ -824,6 +996,13 @@ class StoryboardAgent(AgentInterface):
             "shots": shots,
             "episode_number": ep_n,
         }
+        if scene_time:
+            segment["scene_time"] = scene_time
+        if scene_space:
+            segment["scene_space"] = scene_space
+        if scene_context:
+            segment["scene_context"] = scene_context
+        return segment
 
     @classmethod
     def _build_segments_by_regex(
@@ -845,6 +1024,9 @@ class StoryboardAgent(AgentInterface):
 
         atomic_shots: List[dict] = []
         current_location = setting_names[0] if setting_names else ""
+        current_scene_time = ""
+        current_scene_space = ""
+        current_scene_context = ""
         scene_characters: List[str] = []
         scene_key = 0
         found_scene_header = False
@@ -856,11 +1038,14 @@ class StoryboardAgent(AgentInterface):
             if re.match(r"^第?\d+集$", line):
                 continue
 
-            header_location = cls._parse_scene_header(line, setting_names)
-            if header_location:
+            header_parts = cls._parse_scene_header_parts(line, setting_names)
+            if header_parts:
                 found_scene_header = True
                 scene_key += 1
-                current_location = header_location
+                current_location = header_parts.get("location", current_location)
+                current_scene_time = header_parts.get("scene_time", "")
+                current_scene_space = header_parts.get("scene_space", "")
+                current_scene_context = header_parts.get("scene_context", line)
                 matched = cls._match_characters(line, character_names)
                 if matched:
                     scene_characters = matched
@@ -892,6 +1077,9 @@ class StoryboardAgent(AgentInterface):
             atomic_shots.append({
                 "scene_key": scene_key,
                 "location": location,
+                "scene_time": current_scene_time,
+                "scene_space": current_scene_space,
+                "scene_context": current_scene_context,
                 "characters": shot_chars,
                 "shot": {
                     "shot_number": 0,
@@ -915,10 +1103,14 @@ class StoryboardAgent(AgentInterface):
         current_items: List[dict] = []
         current_scene_key: Optional[int] = None
         current_location = ""
+        current_scene_time = ""
+        current_scene_space = ""
+        current_scene_context = ""
         current_chars: List[str] = []
 
         def flush_current():
-            nonlocal current_items, current_scene_key, current_location, current_chars
+            nonlocal current_items, current_scene_key, current_location
+            nonlocal current_scene_time, current_scene_space, current_scene_context, current_chars
             if not current_items:
                 return
             shots = [item["shot"] for item in current_items]
@@ -935,10 +1127,16 @@ class StoryboardAgent(AgentInterface):
                 current_location,
                 shots,
                 chars,
+                current_scene_time,
+                current_scene_space,
+                current_scene_context,
             ))
             current_items = []
             current_scene_key = None
             current_location = ""
+            current_scene_time = ""
+            current_scene_space = ""
+            current_scene_context = ""
             current_chars = []
 
         for item in atomic_shots:
@@ -957,6 +1155,9 @@ class StoryboardAgent(AgentInterface):
             current_items.append(item)
             current_scene_key = item["scene_key"]
             current_location = item["location"]
+            current_scene_time = item.get("scene_time", "")
+            current_scene_space = item.get("scene_space", "")
+            current_scene_context = item.get("scene_context", "")
             for name in item["characters"]:
                 if name not in current_chars:
                     current_chars.append(name)
@@ -1046,6 +1247,9 @@ class StoryboardAgent(AgentInterface):
                     "segment_number": seg.get("segment_number", len(valid_segments) + 1),
                     "total_duration": seg.get("total_duration", calc_total_duration),
                     "location": seg.get("location", ""),
+                    "scene_time": seg.get("scene_time", ""),
+                    "scene_space": seg.get("scene_space", ""),
+                    "scene_context": seg.get("scene_context", ""),
                     "characters": seg.get("characters", []),
                     "shots": valid_shots
                 })
@@ -1112,11 +1316,20 @@ class StoryboardAgent(AgentInterface):
         sets = script_data.get("settings", [])
         
         self._report_progress("分镜", f"开始生成 {len(episodes_to_proc)} 集缺失的分镜...", 5)
+        total_to_process = len(episodes_to_proc)
+        completed_count = 0
+        progress_state = {"percent": 10}
+
+        def report_storyboard_note(message: str, percent: Optional[int] = None, data: Optional[dict] = None):
+            if percent is not None:
+                progress_state["percent"] = max(progress_state["percent"], percent)
+            self._report_progress("分镜设计", message, progress_state["percent"], data)
         
         async def proc_ep(ep):
             ep_n = ep.get("episode_number", 1)
             ep_t = ep.get("act_title", f"第{ep_n}集")
             ep_c = ep.get("content", "")
+            report_storyboard_note(f"正在处理第 {ep_n} 集分镜")
             segments = await self._design_episode_storyboard(
                 ep_n,
                 ep_t,
@@ -1126,6 +1339,7 @@ class StoryboardAgent(AgentInterface):
                 style,
                 llm_model,
                 sid,
+                progress_note=report_storyboard_note,
             )
 
             return {
@@ -1146,12 +1360,13 @@ class StoryboardAgent(AgentInterface):
         with open(session_file, "w", encoding="utf-8") as f:
             json.dump(session_data, f, indent=2, ensure_ascii=False)
         # 报告一次进度，带上 asset_complete 强制前端从磁盘刷新一次初步数据
-        self._report_progress("分镜设计", "准备生成分镜...", 10, {"asset_complete": True})
+        report_storyboard_note("准备生成分镜...", 10, {"asset_complete": True})
 
         results_queue = [asyncio.create_task(proc_ep(ep)) for ep in episodes_to_proc]
 
         for coro in asyncio.as_completed(results_queue):
             res = await coro
+            completed_count += 1
             updated_ep_map[res["episode_number"]] = res
             
             # 每完成一集分镜，立即持久化并触发增量同步
@@ -1164,8 +1379,13 @@ class StoryboardAgent(AgentInterface):
             with open(session_file, "w", encoding="utf-8") as f:
                 json.dump(session_data, f, indent=2, ensure_ascii=False)
             
-            # 报告带有 asset_complete 的进度，强制编排器刷新前端数据
-            self._report_progress("分镜设计", f"集数 {res['episode_number']} 分镜已生成", 50, {"asset_complete": True})
+            # 并发多集时只按已完成集数推进全局进度，避免各集内部进度互相覆盖。
+            pct = min(95, 10 + int(85 * completed_count / max(total_to_process, 1)))
+            report_storyboard_note(
+                f"已完成 {completed_count}/{total_to_process} 集分镜：第 {res['episode_number']} 集",
+                pct,
+                {"asset_complete": True},
+            )
 
         final_all_episodes = sorted(updated_ep_map.values(), key=lambda x: x["episode_number"])
         

@@ -91,7 +91,6 @@ const STANDARD_STYLE_PRESETS = [
 const DEFAULT_STANDARD_STYLE_CONTROL = STANDARD_STYLE_PRESETS[0].prompt;
 
 const TEMPLATE_TEXT_DEFAULTS = {
-  title: '山河入梦',
   text: '心之所向，素履而往',
 };
 
@@ -385,7 +384,8 @@ function statusText(status?: string) {
 
 function taskTitle(task: PipelineTask) {
   const input = task.input || {};
-  return input.title || input.goods_title || input.text || input.prompt_text || input.goods_text || task.task_id;
+  const output = task.output || {};
+  return output.title || input.title || input.goods_title || input.text || input.prompt_text || input.goods_text || task.task_id;
 }
 
 type PipelineArtifact = NonNullable<PipelineTask['artifacts']>[number];
@@ -788,7 +788,6 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
     setEnableSubtitles(true);
     setStandardVideoMode('image_concat');
     setText(current => current || TEMPLATE_TEXT_DEFAULTS.text);
-    setTitleValue(current => current || TEMPLATE_TEXT_DEFAULTS.title);
     setSelectedTemplateId(current => {
       if (current && templates.some(item => item.id === current && item.ratio === ratio)) return current;
       return templates.find(item => item.ratio === ratio)?.id || current;
@@ -840,7 +839,6 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
     setEnableSubtitles(true);
     setStandardVideoMode('image_concat');
     setText(current => current || TEMPLATE_TEXT_DEFAULTS.text);
-    setTitleValue(current => current || TEMPLATE_TEXT_DEFAULTS.title);
   };
 
   const canSubmit = useMemo(() => {
@@ -911,6 +909,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
     setRunning(true);
     setError('');
     try {
+      const submittedTitle = titleValue.trim();
       const common = {
         video_model: videoModel,
         video_ratio: ratio,
@@ -922,7 +921,7 @@ export default function PipelinePage({ pipeline, title, subtitle }: PipelinePage
         ? await startStandardPipeline({
             text,
             mode: standardMode,
-            title: titleValue || undefined,
+            title: submittedTitle || undefined,
             llm_model: llmModel,
             image_model: imageModel,
             video_ratio: ratio,

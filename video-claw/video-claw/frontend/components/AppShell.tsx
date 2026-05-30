@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Clapperboard, Clock, Hexagon, Home, Loader2, PanelLeftOpen, Repeat2, Settings, Trash2, UserRound } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Clapperboard, Clock, Hexagon, Home, Loader2, PanelLeftOpen, Repeat2, Settings, Trash2, UserRound } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { clearTempCache, fetchPipelineTasks, fetchSandboxTasks, fetchSessions, type PipelineTask, type SandboxTask } from '@/lib/workflowApi';
@@ -26,6 +26,7 @@ const PIPELINE_ROUTES: Record<string, { href: string; label: string }> = {
 const TASK_STATUS_STYLE: Record<string, string> = {
   pending: 'bg-gray-100 text-gray-500',
   running: 'bg-blue-50 text-blue-600',
+  waiting: 'bg-amber-50 text-amber-600',
   completed: 'bg-green-50 text-green-600',
   failed: 'bg-red-50 text-red-600',
 };
@@ -33,6 +34,7 @@ const TASK_STATUS_STYLE: Record<string, string> = {
 function statusText(status?: string) {
   if (status === 'pending') return '等待中';
   if (status === 'running') return '生成中';
+  if (status === 'waiting') return '待确认';
   if (status === 'completed') return '已完成';
   if (status === 'failed') return '失败';
   return status || '未知';
@@ -40,7 +42,8 @@ function statusText(status?: string) {
 
 function taskTitle(task: PipelineTask) {
   const input = task.input || {};
-  return input.title || input.goods_title || input.text || input.prompt_text || input.goods_text || task.task_id;
+  const output = task.output || {};
+  return output.title || input.title || input.goods_title || input.text || input.prompt_text || input.goods_text || task.task_id;
 }
 
 type RunningTaskItem = {
@@ -53,6 +56,8 @@ type RunningTaskItem = {
 };
 
 const WORKFLOW_STAGE_COUNT = 7;
+const COMPLETED_TASK_DISMISS_KEY = 'video-claw.dismissed-completed-tasks';
+const SIDEBAR_OPEN_KEY = 'video-claw.sidebar-open';
 
 function projectTaskFromSession(session: any): RunningTaskItem | null {
   const statusMap = session.status || {};
@@ -70,6 +75,23 @@ function projectTaskFromSession(session: any): RunningTaskItem | null {
   };
 }
 
+function projectReviewTaskFromSession(session: any): RunningTaskItem | null {
+  const statusMap = session.status || {};
+  const waitingStage = Object.keys(statusMap).find(key => statusMap[key] === 'waiting');
+  const completed = Object.values(statusMap).filter(value => ['completed', 'session_completed'].includes(String(value))).length;
+  const allDone = completed >= WORKFLOW_STAGE_COUNT || statusMap.completed === 'completed';
+  if (!waitingStage && !allDone) return null;
+  const targetStage = waitingStage || Object.keys(statusMap).reverse().find(key => ['completed', 'session_completed'].includes(String(statusMap[key]))) || '';
+  return {
+    id: `project-review-${session.id}-${waitingStage || 'completed'}`,
+    href: `/?session=${encodeURIComponent(session.id)}${targetStage ? `&stage=${encodeURIComponent(targetStage)}` : ''}`,
+    title: session.idea || session.title || session.id,
+    scope: waitingStage ? `主流程 · ${waitingStage}` : '主流程',
+    status: waitingStage ? 'waiting' : 'completed',
+    progress: waitingStage ? Math.round((completed / WORKFLOW_STAGE_COUNT) * 100) : 100,
+  };
+}
+
 function pipelineTaskItem(task: PipelineTask): RunningTaskItem | null {
   const route = PIPELINE_ROUTES[task.pipeline];
   if (!route || !['pending', 'running'].includes(task.status)) return null;
@@ -80,6 +102,19 @@ function pipelineTaskItem(task: PipelineTask): RunningTaskItem | null {
     scope: route.label,
     status: task.status,
     progress: task.progress || 0,
+  };
+}
+
+function pipelineCompletedTaskItem(task: PipelineTask): RunningTaskItem | null {
+  const route = PIPELINE_ROUTES[task.pipeline];
+  if (!route || task.status !== 'completed') return null;
+  return {
+    id: `pipeline-completed-${task.task_id}`,
+    href: `${route.href}?task=${encodeURIComponent(task.task_id)}`,
+    title: String(taskTitle(task)),
+    scope: route.label,
+    status: 'completed',
+    progress: 100,
   };
 }
 
@@ -103,40 +138,54 @@ function sandboxTaskItem(task: SandboxTask): RunningTaskItem {
   };
 }
 
-function RunningTaskList({ currentPath }: { currentPath: string }) {
-  const router = useRouter();
-  const [tasks, setTasks] = useState<RunningTaskItem[]>([]);
-  const [loading, setLoading] = useState(false);
+function loadDismissedCompletedTasks(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem(COMPLETED_TASK_DISMISS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const [pipelineRecords, sessions, sandboxRecords] = await Promise.all([
-        fetchPipelineTasks(100).catch(() => []),
-        fetchSessions().catch(() => []),
-        fetchSandboxTasks().catch(() => []),
-      ]);
-      setTasks([
-        ...sandboxRecords.map(sandboxTaskItem),
-        ...pipelineRecords.map(pipelineTaskItem).filter((task): task is RunningTaskItem => Boolean(task)),
-        ...sessions.map(projectTaskFromSession).filter((task): task is RunningTaskItem => Boolean(task)),
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
+function saveDismissedCompletedTasks(ids: Set<string>) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(COMPLETED_TASK_DISMISS_KEY, JSON.stringify(Array.from(ids)));
+}
 
-  useEffect(() => {
-    load().catch(() => {});
-    const timer = window.setInterval(() => load().catch(() => {}), 3000);
-    return () => window.clearInterval(timer);
-  }, []);
+function loadSidebarOpen(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(SIDEBAR_OPEN_KEY) === 'true';
+}
 
+function saveSidebarOpen(open: boolean) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(SIDEBAR_OPEN_KEY, open ? 'true' : 'false');
+}
+
+function TaskPanel({
+  title,
+  icon,
+  loading,
+  tasks,
+  currentPath,
+  emptyText,
+  onTaskClick,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  loading?: boolean;
+  tasks: RunningTaskItem[];
+  currentPath: string;
+  emptyText: string;
+  onTaskClick: (task: RunningTaskItem) => void;
+}) {
   return (
-    <section className="h-[30vh] min-h-44 border-t border-gray-100 p-3">
+    <section className="h-[20vh] min-h-32 border-t border-gray-100 p-3">
       <div className="mb-2 flex items-center gap-2 px-1">
-        <Clock className="h-3.5 w-3.5 text-gray-400" />
-        <span className="text-xs font-medium text-gray-500">进行中任务</span>
+        {icon}
+        <span className="text-xs font-medium text-gray-500">{title}</span>
         {loading && <Loader2 className="ml-auto h-3 w-3 animate-spin text-gray-300" />}
       </div>
       <div className="h-[calc(100%-26px)] overflow-y-auto pr-1">
@@ -148,7 +197,7 @@ function RunningTaskList({ currentPath }: { currentPath: string }) {
                 <button
                   key={task.id}
                   type="button"
-                  onClick={() => router.push(task.href)}
+                  onClick={() => onTaskClick(task)}
                   className={clsx(
                     'w-full rounded-lg border px-2.5 py-2 text-left transition-colors',
                     active ? 'border-blue-100 bg-blue-50/60' : 'border-gray-100 bg-white hover:border-blue-200 hover:bg-blue-50/40'
@@ -173,12 +222,83 @@ function RunningTaskList({ currentPath }: { currentPath: string }) {
             })}
           </div>
         ) : (
-          <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-gray-100 text-xs text-gray-300">
-            暂无进行中任务
+          <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-gray-100 px-2 text-center text-xs text-gray-300">
+            {emptyText}
           </div>
         )}
       </div>
     </section>
+  );
+}
+
+function SidebarTaskPanels({ currentPath }: { currentPath: string }) {
+  const router = useRouter();
+  const [runningTasks, setRunningTasks] = useState<RunningTaskItem[]>([]);
+  const [completedTasks, setCompletedTasks] = useState<RunningTaskItem[]>([]);
+  const [dismissedCompleted, setDismissedCompleted] = useState<Set<string>>(() => loadDismissedCompletedTasks());
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [pipelineRecords, sessions, sandboxRecords] = await Promise.all([
+        fetchPipelineTasks(100).catch(() => []),
+        fetchSessions().catch(() => []),
+        fetchSandboxTasks().catch(() => []),
+      ]);
+      setRunningTasks([
+        ...sandboxRecords.map(sandboxTaskItem),
+        ...pipelineRecords.map(pipelineTaskItem).filter((task): task is RunningTaskItem => Boolean(task)),
+        ...sessions.map(projectTaskFromSession).filter((task): task is RunningTaskItem => Boolean(task)),
+      ]);
+      setCompletedTasks([
+        ...pipelineRecords.map(pipelineCompletedTaskItem).filter((task): task is RunningTaskItem => Boolean(task)),
+        ...sessions.map(projectReviewTaskFromSession).filter((task): task is RunningTaskItem => Boolean(task)),
+      ].filter(task => !dismissedCompleted.has(task.id)));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load().catch(() => {});
+    const timer = window.setInterval(() => load().catch(() => {}), 3000);
+    return () => window.clearInterval(timer);
+  }, [dismissedCompleted]);
+
+  const handleRunningClick = (task: RunningTaskItem) => {
+    router.push(task.href);
+  };
+
+  const handleCompletedClick = (task: RunningTaskItem) => {
+    const next = new Set(dismissedCompleted);
+    next.add(task.id);
+    saveDismissedCompletedTasks(next);
+    setDismissedCompleted(next);
+    setCompletedTasks(current => current.filter(item => item.id !== task.id));
+    router.push(task.href);
+  };
+
+  return (
+    <>
+      <TaskPanel
+        title="进行中任务"
+        icon={<Clock className="h-3.5 w-3.5 text-gray-400" />}
+        loading={loading}
+        tasks={runningTasks}
+        currentPath={currentPath}
+        emptyText="暂无进行中任务"
+        onTaskClick={handleRunningClick}
+      />
+      <TaskPanel
+        title="已完成/等待确认"
+        icon={<CheckCircle2 className="h-3.5 w-3.5 text-gray-400" />}
+        tasks={completedTasks}
+        currentPath={currentPath}
+        emptyText="暂无已完成或待确认任务"
+        onTaskClick={handleCompletedClick}
+      />
+    </>
   );
 }
 
@@ -188,6 +308,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
+
+  useEffect(() => {
+    setOpen(loadSidebarOpen());
+  }, []);
+
+  const setSidebarOpen = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    saveSidebarOpen(nextOpen);
+  };
 
   const handleClearCache = async () => {
     setClearingCache(true);
@@ -241,7 +370,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-          <RunningTaskList currentPath={pathname} />
+          <SidebarTaskPanels currentPath={pathname} />
           <div className="relative border-t border-gray-100 p-3">
             {(() => {
               const Icon = SETTINGS_ITEM.icon;
@@ -294,7 +423,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {open && (
         <button
-          onClick={() => setOpen(false)}
+          onClick={() => setSidebarOpen(false)}
           className="fixed left-60 top-1/2 z-50 h-14 w-7 -translate-y-1/2 rounded-r-xl border border-l-0 border-gray-200 bg-white text-gray-400 shadow-sm hover:w-9 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 flex items-center justify-center transition-all"
           title="收起侧边栏"
         >
@@ -304,7 +433,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {!open && (
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => setSidebarOpen(true)}
           className="fixed left-0 top-1/2 z-50 h-14 w-7 -translate-y-1/2 rounded-r-xl border border-l-0 border-gray-200 bg-white text-gray-400 shadow-sm hover:w-9 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 flex items-center justify-center transition-all"
           title="打开侧边栏"
         >

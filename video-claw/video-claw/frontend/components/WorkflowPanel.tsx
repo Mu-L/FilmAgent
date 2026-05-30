@@ -64,6 +64,29 @@ function initStageStates(): Record<string, StageState> {
   return states;
 }
 
+function hasDoneArtifactItems(artifact: any): boolean {
+  if (!artifact) return false;
+  return ['clips', 'images', 'scenes', 'characters', 'settings'].some(key => {
+    const items = artifact?.[key];
+    return Array.isArray(items) && items.some((item: any) => item?.status === 'done' || item?.selected);
+  });
+}
+
+function getStageProgressSnapshot(status: any, stageId: string): Partial<StageState> {
+  const snapshot = status?.stage_progress?.[stageId];
+  if (!snapshot || typeof snapshot !== 'object') return {};
+  const progress = typeof snapshot.percent === 'number'
+    ? Math.max(0, Math.min(100, Math.round(snapshot.percent)))
+    : undefined;
+  const progressMessage = typeof snapshot.message === 'string' && snapshot.message.trim()
+    ? snapshot.message
+    : (typeof snapshot.step === 'string' ? snapshot.step : undefined);
+  return {
+    ...(typeof progress === 'number' ? { progress } : {}),
+    ...(progressMessage ? { progressMessage } : {}),
+  };
+}
+
 export default function WorkflowPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -146,24 +169,20 @@ export default function WorkflowPanel() {
           pollRef.current = null;
           return;
         }
-        // 更新进度信息（从 artifacts 中读取）
+        // 更新进度信息（优先使用后端持久化的 stage_progress 快照）
         const artifacts = status.artifacts || {};
         const currentArtifact = artifacts[stageId];
-        const update: Partial<StageState> = {};
+        const update: Partial<StageState> = {
+          status: 'running',
+          ...getStageProgressSnapshot(status, stageId),
+        };
 
         // 无论何种状态，只要有数据就更新 artifact
         if (currentArtifact) {
           update.artifact = currentArtifact;
         }
 
-        // 始终设置状态为 running（如果尚未设置）
-        const currentState = stageStates[stageId];
-        if (!currentState || currentState.status === 'pending') {
-          update.status = 'running';
-          update.progress = 0;
-        }
-
-        if (currentArtifact) {
+        if (!update.progressMessage && currentArtifact) {
           // 检查是否有已生成的参考图/视频/分镜
           const hasProgress = currentArtifact.scenes?.some((s: any) => s.versions?.length > 0) ||
                              currentArtifact.clips?.some((c: any) => c.versions?.length > 0) ||
@@ -175,7 +194,7 @@ export default function WorkflowPanel() {
           } else {
             update.progressMessage = '执行中...';
           }
-        } else {
+        } else if (!update.progressMessage) {
           update.progressMessage = '执行中...';
         }
 
@@ -218,10 +237,23 @@ export default function WorkflowPanel() {
   }, []);
 
   const updateStageState = (stageId: string, update: Partial<StageState>) => {
-    setStageStates(prev => ({
-      ...prev,
-      [stageId]: { ...prev[stageId], ...update },
-    }));
+    setStageStates(prev => {
+      const current = prev[stageId];
+      const nextUpdate = { ...update };
+      if (
+        current?.status === 'running' &&
+        typeof update.progress === 'number' &&
+        update.progress < (current.progress || 0) &&
+        update.status !== 'completed' &&
+        update.status !== 'waiting'
+      ) {
+        nextUpdate.progress = current.progress;
+      }
+      return {
+        ...prev,
+        [stageId]: { ...current, ...nextUpdate },
+      };
+    });
   };
 
   // ── 停止执行 ──
@@ -243,10 +275,7 @@ export default function WorkflowPanel() {
       for (const s of STAGE_ORDER) {
         if (next[s]?.status === 'running') {
           // 如果已有 artifact 数据（如部分已生成的视频片段），保留为 waiting 状态以便用户操作
-          const hasArtifact = next[s]?.artifact &&
-            (Array.isArray(next[s].artifact?.clips) ? next[s].artifact.clips.some((c: any) => c.status === 'done') :
-             Array.isArray(next[s].artifact?.images) ? next[s].artifact.images.some((c: any) => c.status === 'done') :
-             false);
+          const hasArtifact = hasDoneArtifactItems(next[s]?.artifact);
           if (hasArtifact) {
             next[s] = { ...next[s], status: 'waiting', error: null, progressMessage: '已停止（保留已完成内容）' };
           } else {
@@ -267,10 +296,7 @@ export default function WorkflowPanel() {
                 const cur = prev[s];
                 if (!cur || cur.status === 'completed') return prev;
                 // 检查 artifact 是否含有效内容
-                const clips = artResult.artifact?.clips;
-                const images = artResult.artifact?.images;
-                const hasDone = (Array.isArray(clips) && clips.some((c: any) => c.status === 'done'))
-                    || (Array.isArray(images) && images.some((c: any) => c.status === 'done'));
+                const hasDone = hasDoneArtifactItems(artResult.artifact);
                 if (hasDone) {
                   return { ...prev, [s]: { ...cur, status: 'waiting', artifact: artResult.artifact, error: null, progressMessage: '已停止（保留已完成内容）' } };
                 }
@@ -407,10 +433,7 @@ export default function WorkflowPanel() {
               artifact = artResult?.artifact;
             } catch { /* ignore */ }
             // 如果有已完成的内容，显示为 waiting 状态
-            const clips = artifact?.clips;
-            const images = artifact?.images;
-            const hasDone = (Array.isArray(clips) && clips.some((c: any) => c.status === 'done'))
-                || (Array.isArray(images) && images.some((c: any) => c.status === 'done'));
+            const hasDone = hasDoneArtifactItems(artifact);
             if (hasDone) {
               updateStageState(stageId, {
                 status: 'waiting',
@@ -1027,11 +1050,20 @@ export default function WorkflowPanel() {
         const isWaiting = cStatus === 'waiting';
         const isStopped = cStatus === 'stopped';
         const isRunningStatus = cStatus === 'running';
+        const progressSnapshot = getStageProgressSnapshot(status, sName);
 
         newStates[sName] = {
           status: isError ? 'error' : (isWaiting ? 'waiting' : (isStopped ? 'stopped' : (isCompleted ? 'completed' : 'running'))),
-          progress: isCompleted ? 100 : 0,
-          progressMessage: isError ? '执行失败' : (isWaiting ? '等待确认' : (isStopped ? '已停止' : (isCompleted ? '已完成' : (isRunningStatus ? '执行中...' : '进行中')))),
+          progress: isCompleted ? 100 : (typeof progressSnapshot.progress === 'number' ? progressSnapshot.progress : 0),
+          progressMessage: isError
+            ? '执行失败'
+            : (isWaiting
+              ? '等待确认'
+              : (isStopped
+                ? '已停止'
+                : (isCompleted
+                  ? '已完成'
+                  : (progressSnapshot.progressMessage || (isRunningStatus ? '执行中...' : '进行中'))))),
           artifact: status.artifacts?.[sName] || null,
           error: isError ? (status.error || '执行出错') : (isStopped ? '手动停止' : null),
         };
