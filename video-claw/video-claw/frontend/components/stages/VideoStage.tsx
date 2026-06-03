@@ -130,6 +130,7 @@ function ClipRow({
   canEdit,
   disabled,
   isSaving,
+  allowMissingGenerate,
 }: {
   clip: ClipItem;
   editDesc?: string;
@@ -144,12 +145,14 @@ function ClipRow({
   canEdit?: boolean;
   disabled?: boolean;
   isSaving?: boolean;
+  allowMissingGenerate?: boolean;
 }) {
   const isRunning = clip.status === 'running' || isRegenerating;
   const isPending = clip.status === 'pending';
   const isFailed = clip.status === 'failed' && !isRegenerating;
   const hasChanges = editDesc !== clip.description;
   const hasVideo = Boolean(clip.selected) || clip.versions.length > 0;
+  const canGenerateMissing = Boolean(allowMissingGenerate) && !hasVideo && !isRunning && !isRegenerating;
 
   return (
     <div className={`flex flex-col xl:flex-row border rounded-xl overflow-hidden bg-white ${disabled ? 'opacity-50' : ''} ${
@@ -218,8 +221,8 @@ function ClipRow({
             <p className="text-xs text-gray-400 italic">无提示词</p>
           </div>
         )}
-        {/* 已有视频显示重新生成；失败但无视频时也必须允许重试。 */}
-        {!isStageRunning && (hasVideo || isFailed) && (
+        {/* 已有视频显示重新生成；失败/旧数据空资源允许补生成。 */}
+        {!isStageRunning && (hasVideo || isFailed || canGenerateMissing) && (
           <button
             onClick={onRegenerate}
             disabled={disabled}
@@ -232,7 +235,7 @@ function ClipRow({
             }`}
           >
             <RefreshCw className="w-3 h-3" />
-            {isFailed ? '点击重试' : '重新生成'}
+            {isFailed ? '点击重试' : hasVideo ? '重新生成' : '生成'}
           </button>
         )}
       </div>
@@ -275,8 +278,22 @@ function ClipRow({
           </div>
         ) : !hasVideo ? (
           <div className="flex items-center justify-center h-32 aspect-video bg-gray-50/30 rounded-lg border border-dashed border-gray-200">
-            <div className="flex items-center gap-2 text-gray-400 text-xs px-4">
+            <div className="flex flex-col items-center gap-1 text-gray-400 text-xs px-4">
               <span>暂无视频</span>
+              {!isStageRunning && canGenerateMissing && (
+                <button
+                  onClick={onRegenerate}
+                  disabled={disabled}
+                  className={`mt-1 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors ${
+                    disabled
+                      ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                      : 'text-rose-600 bg-rose-50 hover:bg-rose-100'
+                  }`}
+                >
+                  <RefreshCw className="w-2.5 h-2.5" />
+                  生成
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -604,6 +621,7 @@ export default function VideoStage({ state, sessionId, onConfirm, onIntervene, o
                               canEdit={canEdit}
                               disabled={!hasRef}
                               isSaving={savingIds.has(clip.id)}
+                              allowMissingGenerate={state.status !== 'pending'}
                             />
                           </div>
                         );

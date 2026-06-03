@@ -115,12 +115,14 @@ class CharacterDesignerAgent(AgentInterface):
         versions = self._list_versions(sid, asset_type, asset_id)
         if not selected_path and versions:
             selected_path = versions[-1]
+        status = "done" if selected_path or versions else "failed"
         return {
             "id": asset_id,
             "name": name,
             "description": desc,
             "selected": selected_path,
             "versions": versions,
+            "status": status,
         }
 
     # ─── 图片生成 ───

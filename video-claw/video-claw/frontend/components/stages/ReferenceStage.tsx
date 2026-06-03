@@ -139,6 +139,7 @@ function SceneRow({
   isEditing,
   onToggleEdit,
   getSelected,
+  allowMissingGenerate,
 }: {
   scene: SceneItem;
   canEdit: boolean;
@@ -152,11 +153,13 @@ function SceneRow({
   isEditing?: boolean;
   onToggleEdit?: () => void;
   getSelected: (scene: SceneItem) => string;
+  allowMissingGenerate?: boolean;
 }) {
   const isRunning = scene.status === 'running' || isRegenerating;
   const isPending = scene.status === 'pending';
   const isFailed = scene.status === 'failed' && !isRegenerating;
   const hasImage = Boolean(getSelected(scene)) || scene.versions.length > 0;
+  const canGenerateMissing = Boolean(allowMissingGenerate) && !hasImage && !isRunning && !isRegenerating;
   const hasChanges = editDesc !== scene.description;
 
   return (
@@ -219,8 +222,8 @@ function SceneRow({
             <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{scene.description}</p>
           </div>
         )}
-        {/* 已有图片显示重新生成；失败但无图片时也必须允许重试。 */}
-        {!isStageRunning && (hasImage || isFailed) && (
+        {/* 已有图片显示重新生成；失败/旧数据空资源允许补生成。 */}
+        {!isStageRunning && (hasImage || isFailed || canGenerateMissing) && (
           <button
             onClick={onRegenerate}
             disabled={isRegenerating}
@@ -233,7 +236,7 @@ function SceneRow({
             }`}
           >
             <RefreshCw className={`w-3 h-3 ${isRegenerating ? 'animate-spin' : ''}`} />
-            {isRegenerating ? '生成中...' : isFailed ? '点击重试' : '重新生成'}
+            {isRegenerating ? '生成中...' : isFailed ? '点击重试' : hasImage ? '重新生成' : '生成'}
           </button>
         )}
       </div>
@@ -269,6 +272,16 @@ function SceneRow({
                 <>
                   <ImagePlus className="w-4 h-4" />
                   <span>{isPending ? '等待生成...' : '暂无图片'}</span>
+                  {!isStageRunning && canGenerateMissing && (
+                    <button
+                      onClick={onRegenerate}
+                      disabled={isRegenerating}
+                      className="mt-1 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-colors disabled:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" />
+                      生成
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -536,6 +549,7 @@ export default function ReferenceStage({ state, sessionId, onConfirm, onInterven
                             onToggleEdit={() => handleToggleEdit(scene.id)}
                             canEdit={canEdit}
                             getSelected={getSelected}
+                            allowMissingGenerate={state.status !== 'pending'}
                           />
                         </div>
                       ))}

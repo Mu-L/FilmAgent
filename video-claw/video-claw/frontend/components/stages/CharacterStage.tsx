@@ -150,6 +150,7 @@ function AssetRow({
   const isPending = asset.status === 'pending' || isRegenerating;
   const isFailed = asset.status === 'failed' && !isRegenerating;
   const hasImage = Boolean(asset.selected) || asset.versions.length > 0;
+  const canGenerateMissing = !hasImage && !isPending && !isRegenerating;
 
   return (
     <div className={`flex flex-col xl:flex-row border rounded-xl overflow-hidden bg-white ${
@@ -182,8 +183,8 @@ function AssetRow({
         ) : (
           <p className="flex-1 text-xs text-gray-600 leading-relaxed">{asset.description}</p>
         )}
-        {/* 已有图片显示重新生成；失败但无图片时也必须允许重试。 */}
-        {!isStageRunning && (hasImage || isFailed) && (
+        {/* 已有图片显示重新生成；失败/旧数据空资源允许补生成。 */}
+        {!isStageRunning && (hasImage || isFailed || canGenerateMissing) && (
           <button
             onClick={onRegenerate}
             disabled={isRegenerating}
@@ -196,7 +197,7 @@ function AssetRow({
             }`}
           >
             <RefreshCw className={`w-3 h-3 ${isRegenerating ? 'animate-spin' : ''}`} />
-            {isRegenerating ? '生成中...' : isFailed ? '点击重试' : '重新生成'}
+            {isRegenerating ? '生成中...' : isFailed ? '点击重试' : hasImage ? '重新生成' : '生成'}
           </button>
         )}
       </div>
@@ -232,6 +233,16 @@ function AssetRow({
                 <>
                   <ImagePlus className="w-4 h-4" />
                   <span>暂无图片</span>
+                  {!isStageRunning && canGenerateMissing && (
+                    <button
+                      onClick={onRegenerate}
+                      disabled={isRegenerating}
+                      className="mt-1 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-violet-600 bg-violet-50 hover:bg-violet-100 transition-colors disabled:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" />
+                      生成
+                    </button>
+                  )}
                 </>
               )}
             </div>

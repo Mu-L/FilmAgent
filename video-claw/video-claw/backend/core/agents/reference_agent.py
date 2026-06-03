@@ -523,8 +523,8 @@ class ReferenceGeneratorAgent(AgentInterface):
             # 取提示词
             visual_prompt = prompts_map.get(segment_id) or existing_prompts.get(segment_id) or ""
 
-            # status: 有图片=done, 无图片=pending(待生成)
-            status = "done" if versions else "pending"
+            # 最终 payload 表示阶段已跑完；仍没有图片的片段应标记为 failed，避免覆盖实时失败状态。
+            status = "done" if selected_path or versions else "failed"
             scenes.append({
                 "id": segment_id,
                 "name": f"第{seg.get('episode_number', 1)}集-片段{seg.get('segment_number', idx)}",
