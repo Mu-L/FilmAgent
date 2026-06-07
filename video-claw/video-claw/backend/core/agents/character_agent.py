@@ -86,8 +86,11 @@ class CharacterDesignerAgent(AgentInterface):
         文件命名: {asset_id}.png, {asset_id}_v2.png, {asset_id}_v3.png, ...
         """
         adir = os.path.join(self._asset_base(sid), asset_type)
-        pattern = os.path.join(adir, f"{asset_id}*.png")
-        files = sorted(glob.glob(pattern), key=os.path.getmtime)
+        files = []
+        for ext in ("png", "jpg", "jpeg", "webp", "bmp"):
+            pattern = os.path.join(adir, f"{asset_id}*.{ext}")
+            files.extend(glob.glob(pattern))
+        files = sorted(set(files), key=os.path.getmtime)
         return files
 
     def _next_version_path(self, sid: str, asset_type: str, asset_id: str) -> str:
@@ -513,6 +516,15 @@ class CharacterDesignerAgent(AgentInterface):
                     with ThreadPoolExecutor(max_workers=concurrency) as executor:
                         futs = {}
                         for atype, aid, name, desc, species in tasks:
+                            existing_versions = self._list_versions(sid, atype, aid)
+                            self._report_progress("角色设计", f"正在生成: {name}", 10, data={
+                                "asset_complete": {
+                                    "type": atype,
+                                    "id": aid,
+                                    "status": "running",
+                                    "versions": existing_versions,
+                                }
+                            })
                             fut = executor.submit(
                                 self._generate_one, img_client,
                                 aid, name, desc, atype, style, species, t2i_model, vlm_model, sid

@@ -80,6 +80,31 @@ function hasRunningArtifactItems(artifact: any): boolean {
   });
 }
 
+function mergeAssetVersions(current?: string[], incoming?: string[]): string[] {
+  const merged: string[] = [];
+  [...(Array.isArray(current) ? current : []), ...(Array.isArray(incoming) ? incoming : [])].forEach(path => {
+    if (path && !merged.includes(path)) merged.push(path);
+  });
+  return merged;
+}
+
+function mergeAssetUpdateItem(item: any, assetUpdate: any): any {
+  const hasExistingSelection = Boolean(item?.selected);
+  const nextStatus = hasExistingSelection && ['done', 'failed'].includes(assetUpdate.status)
+    ? 'done'
+    : (assetUpdate.status ?? item.status);
+  return {
+    ...item,
+    status: nextStatus,
+    selected: hasExistingSelection
+      ? item.selected
+      : (assetUpdate.selected || item.selected),
+    versions: assetUpdate.versions
+      ? mergeAssetVersions(item.versions, assetUpdate.versions)
+      : item.versions,
+  };
+}
+
 function getStageProgressSnapshot(status: any, stageId: string): Partial<StageState> {
   const snapshot = status?.stage_progress?.[stageId];
   if (!snapshot || typeof snapshot !== 'object') return {};
@@ -358,12 +383,7 @@ export default function WorkflowPanel() {
               const items = [...(prevArt[key] || [])];
               const idx = items.findIndex((item: any) => item.id === assetUpdate.id);
               if (idx >= 0) {
-                items[idx] = {
-                  ...items[idx],
-                  status: assetUpdate.status,
-                  selected: assetUpdate.selected || items[idx].selected,
-                  versions: assetUpdate.versions || items[idx].versions,
-                };
+                items[idx] = mergeAssetUpdateItem(items[idx], assetUpdate);
               }
               return {
                 ...prev,
@@ -760,12 +780,7 @@ export default function WorkflowPanel() {
               const items = [...(prevArt[key] || [])];
               const idx = items.findIndex((item: any) => item.id === assetUpdate.id);
               if (idx >= 0) {
-                items[idx] = {
-                  ...items[idx],
-                  status: assetUpdate.status,
-                  selected: assetUpdate.selected || items[idx].selected,
-                  versions: assetUpdate.versions || items[idx].versions,
-                };
+                items[idx] = mergeAssetUpdateItem(items[idx], assetUpdate);
               }
               return {
                 ...prev,
@@ -867,8 +882,17 @@ export default function WorkflowPanel() {
         // 剧本阶段：直接保存整个 data 覆盖 artifact
         patch = selections;
       } else if (stageId === 'character_design') {
-        const chars = (art.characters || []).map((c: any) => ({ ...c, selected: selections[c.id] || c.selected }));
-        const sets = (art.settings || []).map((s: any) => ({ ...s, selected: selections[s.id] || s.selected }));
+        const { _editDescs, ...restSelections } = selections;
+        const chars = (art.characters || []).map((c: any) => ({
+          ...c,
+          selected: restSelections[c.id] || c.selected,
+          description: _editDescs?.characters?.[c.id] ?? c.description,
+        }));
+        const sets = (art.settings || []).map((s: any) => ({
+          ...s,
+          selected: restSelections[s.id] || s.selected,
+          description: _editDescs?.settings?.[s.id] ?? s.description,
+        }));
         patch = { characters: chars, settings: sets };
       } else if (stageId === 'storyboard') {
         // 分镜阶段：保存 shots 数据（排除 original_shots，只保留 artifact 需要的字段）

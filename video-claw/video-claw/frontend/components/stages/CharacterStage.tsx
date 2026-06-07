@@ -388,13 +388,14 @@ export default function CharacterStage({ state, sessionId, onConfirm, onInterven
   };
 
   const saveEdit = (id: string) => {
-    // 发送修改后的描述，后端可以用于下次生成
-    onIntervene({
-      update_descriptions: {
-        characters: id in editChars ? { [id]: editChars[id] } : {},
-        settings: id in editSets ? { [id]: editSets[id] } : {},
-      },
-    });
+    const selections: Record<string, any> = {};
+    characters.forEach(c => { selections[c.id] = selectedChars[c.id] || c.selected; });
+    settingsData.forEach(s => { selections[s.id] = selectedSets[s.id] || s.selected; });
+    selections._editDescs = {
+      characters: id in editChars ? { [id]: editChars[id] } : {},
+      settings: id in editSets ? { [id]: editSets[id] } : {},
+    };
+    onSaveSelections?.(selections);
     cancelEdit(id);
   };
 

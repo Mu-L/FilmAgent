@@ -720,20 +720,47 @@ class WorkflowEngine:
                     continue
                 current_versions = current.get("versions") if isinstance(current.get("versions"), list) else []
                 item_versions = item.get("versions") if isinstance(item.get("versions"), list) else []
+                merged_versions = WorkflowEngine._merge_asset_versions(current_versions, item_versions)
                 if len(item_versions) > len(current_versions):
-                    by_id[item_id] = {**current, **copy.deepcopy(item)}
+                    merged_item = {**current, **copy.deepcopy(item)}
+                    merged_item["versions"] = merged_versions
+                    if current.get("selected"):
+                        merged_item["selected"] = current.get("selected")
+                        if item.get("status") in {"done", "failed"}:
+                            merged_item["status"] = "done"
+                    by_id[item_id] = merged_item
                 elif len(item_versions) == len(current_versions):
                     merged_item = {**current, **copy.deepcopy(item)}
                     if not item.get("selected") and current.get("selected"):
                         merged_item["selected"] = current.get("selected")
-                    if not item_versions and current_versions:
-                        merged_item["versions"] = current_versions
-                    if current.get("status") == "failed" and item.get("status") == "done":
+                    if current.get("selected"):
+                        merged_item["selected"] = current.get("selected")
+                        if item.get("status") in {"done", "failed"}:
+                            merged_item["status"] = "done"
+                    if merged_versions:
+                        merged_item["versions"] = merged_versions
+                    if (
+                        current.get("status") == "failed"
+                        and item.get("status") == "done"
+                        and not current.get("selected")
+                    ):
                         merged_item["status"] = "failed"
                     by_id[item_id] = merged_item
 
             merged[key] = [by_id[item_id] for item_id in order if item_id in by_id]
         return merged
+
+    @staticmethod
+    def _merge_asset_versions(current_versions: Any, new_versions: Any) -> List[str]:
+        merged: List[str] = []
+        for value in list(current_versions if isinstance(current_versions, list) else []) + list(new_versions if isinstance(new_versions, list) else []):
+            if value and value not in merged:
+                merged.append(value)
+        return merged
+
+    @staticmethod
+    def _selected_after_asset_update(current_selected: Any, new_selected: Any) -> Any:
+        return current_selected or new_selected or ""
 
     async def execute_stage(self,
                             state: WorkflowState,
@@ -805,11 +832,20 @@ class WorkflowEngine:
 
             for item in items:
                 if isinstance(item, dict) and item.get("id") == item_id:
-                    item["status"] = asset_update.get("status", item.get("status"))
+                    next_status = asset_update.get("status", item.get("status"))
+                    if item.get("selected") and next_status in {"done", "failed"}:
+                        next_status = "done"
+                    item["status"] = next_status
                     if "selected" in asset_update:
-                        item["selected"] = asset_update.get("selected") or item.get("selected", "")
+                        item["selected"] = self._selected_after_asset_update(
+                            item.get("selected"),
+                            asset_update.get("selected"),
+                        )
                     if "versions" in asset_update:
-                        item["versions"] = asset_update.get("versions") or item.get("versions", [])
+                        item["versions"] = self._merge_asset_versions(
+                            item.get("versions"),
+                            asset_update.get("versions"),
+                        )
                     return
 
             items.append({
@@ -1069,6 +1105,49 @@ class WorkflowEngine:
 
     def _apply_artifact_update(self, state: WorkflowState, stage: str, body: Dict[str, Any]):
         """Apply a user edit to in-memory artifacts before the session is persisted."""
+        merge_keys_by_stage = {
+            "character_design": ("characters", "settings"),
+            "reference_generation": ("scenes",),
+            "video_generation": ("clips",),
+        }
+        if stage in merge_keys_by_stage:
+            current_art = state.artifacts.get(stage, {})
+            if isinstance(current_art, dict):
+                for list_key in merge_keys_by_stage[stage]:
+                    if list_key not in body:
+                        continue
+                    current_items = current_art.get(list_key, [])
+                    incoming_items = body.get(list_key, [])
+                    if not isinstance(current_items, list) or not isinstance(incoming_items, list):
+                        continue
+                    current_by_id = {
+                        item.get("id"): item
+                        for item in current_items
+                        if isinstance(item, dict) and item.get("id")
+                    }
+                    merged_items = []
+                    seen_ids = set()
+                    for incoming in incoming_items:
+                        if not isinstance(incoming, dict) or not incoming.get("id"):
+                            continue
+                        item_id = incoming["id"]
+                        current = current_by_id.get(item_id, {})
+                        merged = {**current, **incoming}
+                        if current.get("selected") and not incoming.get("selected"):
+                            merged["selected"] = current.get("selected")
+                        merged["versions"] = self._merge_asset_versions(
+                            current.get("versions"),
+                            incoming.get("versions"),
+                        )
+                        if current.get("selected") and incoming.get("status") in {"failed", "pending"}:
+                            merged["status"] = current.get("status", "done")
+                        merged_items.append(merged)
+                        seen_ids.add(item_id)
+                    for current in current_items:
+                        if isinstance(current, dict) and current.get("id") not in seen_ids:
+                            merged_items.append(current)
+                    body[list_key] = merged_items
+
         if stage == "storyboard" and any(k in body for k in ("episodes", "segments", "shots")):
             for shot in body.get('shots', []):
                 if isinstance(shot, dict) and 'is_new' in shot:

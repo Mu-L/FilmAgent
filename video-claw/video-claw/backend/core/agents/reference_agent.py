@@ -57,8 +57,11 @@ class ReferenceGeneratorAgent(AgentInterface):
     def _list_versions_static(sid: str, shot_id: str) -> List[str]:
         """列出某个分镜的所有历史版本（静态方法，供外部调用）"""
         scenes_dir = os.path.join('code/result/image', str(sid), 'Scenes')
-        pattern = os.path.join(scenes_dir, f"{shot_id}*.jpg")
-        files = sorted(glob.glob(pattern), key=os.path.getmtime)
+        files = []
+        for ext in ("jpg", "jpeg", "png", "webp", "bmp"):
+            pattern = os.path.join(scenes_dir, f"{shot_id}*.{ext}")
+            files.extend(glob.glob(pattern))
+        files = sorted(set(files), key=os.path.getmtime)
         return files
 
     def _next_version_path(self, sid: str, shot_id: str) -> str:
