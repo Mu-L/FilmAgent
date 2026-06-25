@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Save, X, Code, LayoutList, Users, MapPin, Film, Sparkles, BookOpen, Lightbulb, Target, User, Crosshair, RefreshCw, Palette } from 'lucide-react';
+import { Save, X, Code, LayoutList, Users, MapPin, Film, Sparkles, BookOpen, Lightbulb, Target, User, Crosshair, RefreshCw, Palette, Edit3 } from 'lucide-react';
 import type { StageViewProps } from './types';
 import StageActions from './StageActions';
 import StageProgress from './StageProgress';
@@ -53,6 +53,7 @@ interface ActCompleteData {
 
 interface ScriptEpisode {
   act_number: number;
+  episode_number?: number;
   act_title: string;
   content: string;
 }
@@ -112,7 +113,7 @@ function LoglineSummaryBar({ logline }: { logline: LoglineData }) {
   );
 }
 
-export default function ScriptStage({ state, onConfirm, onIntervene, onRegenerate, onSaveSelections, showConfirm, isRunning, hasPendingItems, hasNextStageStarted }: StageViewProps) {
+export default function ScriptStage({ state, sessionId, onConfirm, onIntervene, onRegenerate, onSaveSelections, onUpdateArtifact, showConfirm, isRunning, hasPendingItems, hasNextStageStarted }: StageViewProps) {
   const data: ScriptData = state.artifact || {};
 
   const isLoglinePhase = data.phase === 'logline_selection' || data.phase === 'logline_confirm' || data.phase === 'mode_selection';
@@ -125,6 +126,9 @@ export default function ScriptStage({ state, onConfirm, onIntervene, onRegenerat
   const [showSmartContinueDialog, setShowSmartContinueDialog] = useState(false);
   const [smartContinueEpisodes, setSmartContinueEpisodes] = useState<number>(1);
   const [smartContinueIdea, setSmartContinueIdea] = useState<string>('');
+  const [editingEpisodeIndex, setEditingEpisodeIndex] = useState<number | null>(null);
+  const [savingEpisodeIndex, setSavingEpisodeIndex] = useState<number | null>(null);
+  const [episodeDraft, setEpisodeDraft] = useState<{ title: string; content: string }>({ title: '', content: '' });
 
   const handleSmartContinueConfirm = useCallback(() => {
     onIntervene({
@@ -167,6 +171,57 @@ export default function ScriptStage({ state, onConfirm, onIntervene, onRegenerat
   }, [editMode, rawText, editData, onIntervene]);
 
   const cancelEdit = useCallback(() => setIsEditing(false), []);
+
+  const getEpisodeNumber = (ep: ScriptEpisode, index: number) =>
+    Number(ep.episode_number || ep.act_number || index + 1);
+
+  const startEpisodeEdit = (ep: ScriptEpisode, index: number) => {
+    setEditingEpisodeIndex(index);
+    setEpisodeDraft({
+      title: ep.act_title || '',
+      content: ep.content || '',
+    });
+  };
+
+  const cancelEpisodeEdit = () => {
+    setEditingEpisodeIndex(null);
+    setEpisodeDraft({ title: '', content: '' });
+  };
+
+  const saveEpisodeEdit = async (ep: ScriptEpisode, index: number) => {
+    if (!sessionId || savingEpisodeIndex !== null) return;
+    setSavingEpisodeIndex(index);
+    try {
+      const nextEpisodes = (data.episodes || []).map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+        return {
+          ...item,
+          act_title: episodeDraft.title,
+          ...(Object.prototype.hasOwnProperty.call(item, 'title') ? { title: episodeDraft.title } : {}),
+          content: episodeDraft.content,
+        };
+      });
+      const response = await fetch(`/api/project/${sessionId}/artifact/script_generation`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          episodes: nextEpisodes,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('保存分集剧本失败');
+      }
+      const result = await response.json();
+      if (result.artifact?.episodes) {
+        onUpdateArtifact?.({ episodes: result.artifact.episodes });
+      }
+      cancelEpisodeEdit();
+    } catch (error) {
+      console.error('保存分集剧本失败:', error);
+    } finally {
+      setSavingEpisodeIndex(null);
+    }
+  };
 
   /* ─── 编辑辅助 ─── */
   const updateField = (field: string, value: any) => setEditData(prev => ({ ...prev, [field]: value }));
@@ -486,17 +541,71 @@ export default function ScriptStage({ state, onConfirm, onIntervene, onRegenerat
               </div>
             </div>
             <div className="space-y-6">
-              {data.episodes.map((ep, i) => (
+              {data.episodes.map((ep, i) => {
+                const episodeNumber = getEpisodeNumber(ep, i);
+                const isEpisodeEditing = editingEpisodeIndex === i;
+                const isSavingEpisode = savingEpisodeIndex === i;
+                return (
                 <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                  <div className="bg-gradient-to-r from-purple-50 to-white px-4 py-3 border-b border-purple-100 flex items-center justify-between">
-                    <h4 className="font-bold text-purple-800">第 {ep.act_number || (i + 1)} 集：{ep.act_title}</h4>
-                    <span className="text-[10px] font-bold text-purple-300 bg-purple-50 px-2 py-0.5 rounded uppercase tracking-wider">Episode {ep.act_number || (i + 1)}</span>
+                  <div className="bg-gradient-to-r from-purple-50 to-white px-4 py-3 border-b border-purple-100 flex flex-wrap items-center justify-between gap-3">
+                    {isEpisodeEditing ? (
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <span className="font-bold text-purple-800 whitespace-nowrap">第 {episodeNumber} 集：</span>
+                        <input
+                          value={episodeDraft.title}
+                          onChange={e => setEpisodeDraft(prev => ({ ...prev, title: e.target.value }))}
+                          className="min-w-0 flex-1 rounded-lg border border-purple-100 bg-white px-3 py-1.5 text-sm font-bold text-purple-800 outline-none focus:ring-2 focus:ring-purple-200"
+                        />
+                      </div>
+                    ) : (
+                      <h4 className="font-bold text-purple-800">第 {episodeNumber} 集：{ep.act_title}</h4>
+                    )}
+                    {isEpisodeEditing ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={cancelEpisodeEdit}
+                          disabled={isSavingEpisode}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          取消
+                        </button>
+                        <button
+                          onClick={() => saveEpisodeEdit(ep, i)}
+                          disabled={isSavingEpisode || !episodeDraft.content.trim()}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 disabled:cursor-not-allowed"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          {isSavingEpisode ? '保存中' : '保存'}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startEpisodeEdit(ep, i)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 transition-colors"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        修改
+                      </button>
+                    )}
                   </div>
-                  <div className="p-5 text-gray-700 whitespace-pre-wrap leading-relaxed text-[15px]">
-                    {ep.content}
-                  </div>
+                  {isEpisodeEditing ? (
+                    <div className="p-5">
+                      <textarea
+                        value={episodeDraft.content}
+                        onChange={e => setEpisodeDraft(prev => ({ ...prev, content: e.target.value }))}
+                        rows={12}
+                        className="w-full resize-y rounded-xl border border-gray-200 bg-gray-50 p-4 text-[15px] leading-relaxed text-gray-700 outline-none focus:bg-white focus:ring-2 focus:ring-purple-200"
+                      />
+                    </div>
+                  ) : (
+                    <div className="p-5 text-gray-700 whitespace-pre-wrap leading-relaxed text-[15px]">
+                      {ep.content}
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         ) : data.scenes && data.scenes.length > 0 && (

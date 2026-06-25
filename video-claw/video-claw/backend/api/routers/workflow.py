@@ -231,8 +231,6 @@ async def update_artifact(session_id: str, stage: str, request: Request):
         raise HTTPException(404, "Session not found")
 
 
-
-
 @router.post("/api/project/{session_id}/intervene")
 async def intervene(session_id: str, req: InterventionRequest, request: Request):
     try:
