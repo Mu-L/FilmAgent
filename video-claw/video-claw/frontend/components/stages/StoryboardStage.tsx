@@ -158,19 +158,22 @@ export default function StoryboardStage({
 
   // 计算统计数据
   const stats = useMemo(() => {
-    if (!episodesToRender.length) return { episodes: 0, segments: 0, duration: 0 };
+    if (!episodesToRender.length) return { episodes: 0, segments: 0, shots: 0, duration: 0 };
     let totalSegments = 0;
+    let totalShots = 0;
     let totalDuration = 0;
     episodesToRender.forEach(ep => {
       const segs = ep.segments || [];
       totalSegments += segs.length;
       segs.forEach(seg => {
+        totalShots += (seg.shots || []).length;
         totalDuration += (seg.total_duration || 0);
       });
     });
     return {
       episodes: episodesToRender.length,
       segments: totalSegments,
+      shots: totalShots,
       duration: totalDuration
     };
   }, [episodesToRender]);
@@ -197,7 +200,12 @@ export default function StoryboardStage({
                 <div className="w-px h-6 bg-violet-200" />
                 <div className="flex items-center gap-2">
                   <Clapperboard className="w-3.5 h-3.5 text-violet-500" />
-                  <span className="text-sm text-violet-700 font-bold whitespace-nowrap">{stats.segments} 段分镜</span>
+                  <span className="text-sm text-violet-700 font-bold whitespace-nowrap">{stats.segments} 个片段</span>
+                </div>
+                <div className="w-px h-6 bg-violet-200" />
+                <div className="flex items-center gap-2">
+                  <Camera className="w-3.5 h-3.5 text-violet-500" />
+                  <span className="text-sm text-violet-700 font-bold whitespace-nowrap">{stats.shots} 个分镜</span>
                 </div>
                 <div className="w-px h-6 bg-violet-200" />
                 <div className="flex items-center gap-2 px-1">
@@ -249,17 +257,26 @@ export default function StoryboardStage({
             {episodesToRender.map((episode, epIdx) => {
               const segs = episode.segments || [];
               const epTotalTime = segs.reduce((sum, s) => sum + (s.total_duration || 0), 0);
+              const epShotCount = segs.reduce((sum, s) => sum + ((s.shots || []).length), 0);
               return (
                 <div key={epIdx} className="space-y-4">
                   {/* 一级：剧集抬头 (参考第一阶段) */}
-                  <div className="flex items-center justify-between py-2 px-1 border-b border-gray-100">
-                    <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 py-2 px-1 border-b border-gray-100">
+                    <div className="flex min-w-0 items-center gap-3">
                       <div className="w-1.5 h-6 bg-violet-500 rounded-full" />
-                      <h3 className="text-base font-bold text-gray-800">第 {String(episode.episode_number)} 集：{episode.episode_title}</h3>
+                      <h3 className="min-w-0 text-base font-bold text-gray-800">第 {String(episode.episode_number)} 集：{episode.episode_title}</h3>
                     </div>
-                    <span className="text-[11px] text-violet-600 font-medium bg-violet-50 px-2.5 py-1 rounded-full border border-violet-100 flex items-center gap-1 italic">
-                      <Clock className="w-3 h-3" /> 总计 {epTotalTime}s
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1 text-[11px] text-violet-600 font-medium bg-violet-50 px-2.5 py-1 rounded-full border border-violet-100 italic">
+                        <Clapperboard className="w-3 h-3" /> {segs.length} 个片段
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[11px] text-violet-600 font-medium bg-violet-50 px-2.5 py-1 rounded-full border border-violet-100 italic">
+                        <Camera className="w-3 h-3" /> {epShotCount} 个分镜
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[11px] text-violet-600 font-medium bg-violet-50 px-2.5 py-1 rounded-full border border-violet-100 italic">
+                        <Clock className="w-3 h-3" /> 总计 {epTotalTime}s
+                      </span>
+                    </div>
                   </div>
 
                   {/* 二级：拍摄分段 */}

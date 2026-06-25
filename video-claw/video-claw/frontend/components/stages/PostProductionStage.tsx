@@ -1,13 +1,13 @@
 'use client';
 
 import React from 'react';
-import { Download, Film } from 'lucide-react';
+import { Clock, Clapperboard, Download, Film, RefreshCw } from 'lucide-react';
 import type { StageViewProps } from './types';
 import { assetUrl } from './utils';
 import StageProgress from './StageProgress';
 import StageActions from './StageActions';
 
-export default function PostProductionStage({ state, onConfirm, onRegenerate, showConfirm, isRunning, hasPendingItems, hasNextStageStarted, artifacts, scriptArtifact }: StageViewProps) {
+export default function PostProductionStage({ state, onConfirm, onIntervene, onRegenerate, showConfirm, isRunning, hasPendingItems, hasNextStageStarted, artifacts, scriptArtifact }: StageViewProps) {
   // 提取最终视频列表
   const finalVideos: any[] = state.artifact?.final_videos || [];
   
@@ -27,6 +27,26 @@ export default function PostProductionStage({ state, onConfirm, onRegenerate, sh
     });
     return map;
   }, [artifacts, scriptArtifact]);
+
+  const selectedClipStatsMap = React.useMemo(() => {
+    const clips = artifacts?.video_generation?.clips || [];
+    const map: Record<number, { count: number; duration: number }> = {};
+    const parseEpisode = (clip: any): number => {
+      if (clip?.episode) return Number(clip.episode);
+      const id = String(clip?.id || '');
+      const match = id.match(/(?:seg_|shot_)?(\d{1,3})_\d{1,3}/);
+      return match ? Number(match[1]) : 1;
+    };
+
+    clips.forEach((clip: any) => {
+      if (!clip?.selected) return;
+      const epNum = parseEpisode(clip);
+      if (!map[epNum]) map[epNum] = { count: 0, duration: 0 };
+      map[epNum].count += 1;
+      map[epNum].duration += Number(clip.duration) || 0;
+    });
+    return map;
+  }, [artifacts]);
   
   // 确保能拿到展示数据
   const videosToDisplay = React.useMemo(() => {
@@ -57,6 +77,7 @@ export default function PostProductionStage({ state, onConfirm, onRegenerate, sh
               const epNum = video.episode || (idx + 1);
               const scriptTitle = episodeTitleMap[epNum];
               const epTitle = scriptTitle ? `第 ${epNum} 集：${scriptTitle}` : (video.name || `第 ${epNum} 集`);
+              const stats = selectedClipStatsMap[epNum] || { count: 0, duration: 0 };
               
               return (
                 <div key={idx} className="space-y-4">
@@ -65,6 +86,16 @@ export default function PostProductionStage({ state, onConfirm, onRegenerate, sh
                     <div className="flex min-w-0 items-center gap-3">
                       <div className="w-1.5 h-6 bg-cyan-500 rounded-full" />
                       <h3 className="min-w-0 text-base font-bold text-gray-800">{epTitle}</h3>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1 text-[11px] text-cyan-600 font-medium bg-cyan-50 px-2.5 py-1 rounded-full border border-cyan-100 italic">
+                        <Clapperboard className="w-3 h-3" />
+                        选中 {stats.count} 个分镜
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[11px] text-cyan-600 font-medium bg-cyan-50 px-2.5 py-1 rounded-full border border-cyan-100 italic">
+                        <Clock className="w-3 h-3" />
+                        总计 {stats.duration}s
+                      </span>
                     </div>
                   </div>
                   
@@ -76,7 +107,15 @@ export default function PostProductionStage({ state, onConfirm, onRegenerate, sh
                     />
                   </div>
                   
-                  <div className="flex items-center justify-end">
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      onClick={() => onIntervene({ regenerate_episodes: [epNum] })}
+                      disabled={isRunning}
+                      className="flex items-center gap-2 px-4 py-2 bg-cyan-50 border border-cyan-200 text-cyan-700 rounded-lg text-xs font-medium hover:bg-cyan-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      重新生成本集
+                    </button>
                     <a
                       href={assetUrl(video.path)}
                       download={`${epTitle}.mp4`}

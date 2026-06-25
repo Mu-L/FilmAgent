@@ -400,12 +400,20 @@ class ReferenceGeneratorAgent(AgentInterface):
                 is_acceptable = bool(best_eval.get("is_acceptable")) and not hard_failures
                 if is_acceptable:
                     return segment_id, best_path, best_eval, best_eval.get("rewrite_result") if isinstance(best_eval, dict) else None
+                if hard_failures:
+                    logger.warning(
+                        "[%s] VLM选择的最佳图仍有硬性失败项，保留为候选图供人工确认: %s",
+                        segment_id,
+                        hard_failures,
+                    )
+                    return segment_id, best_path, best_eval, best_eval.get("rewrite_result") if isinstance(best_eval, dict) else None
+                # 低分但已有候选图属于可人工确认的软失败，保留最佳图作为候选，避免把阶段误标为 failed。
                 logger.warning(
-                    "[%s] VLM选择的最佳图仍有硬性失败项，不作为最终参考图: %s",
+                    "[%s] VLM选择的最佳图未达分数阈值，仍作为低分候选图保留: %s",
                     segment_id,
-                    hard_failures or best_eval.get("issues", []),
+                    best_eval.get("issues", []),
                 )
-                return segment_id, None, best_eval, best_eval.get("rewrite_result") if isinstance(best_eval, dict) else None
+                return segment_id, best_path, best_eval, best_eval.get("rewrite_result") if isinstance(best_eval, dict) else None
 
         # 如果没有任何生成成功
         logger.warning(f"[{segment_id}] 没有成功生成任何图片")
@@ -466,7 +474,7 @@ class ReferenceGeneratorAgent(AgentInterface):
         except Exception as e:
             logger.error(f"[{segment_id}] VLM选择最佳图片失败: {e}")
 
-        # 如果失败，不要把未通过硬性校验的图片静默标记为可用。
+        # 如果 VLM 选择失败，仍保留第一张候选图，避免“已有参考图”被误标成失败。
         return image_paths[0], {
             "score": 0,
             "hard_failures": ["VLM选择最佳图片失败，无法确认硬性标准"],
@@ -811,14 +819,20 @@ class ReferenceGeneratorAgent(AgentInterface):
                                     "asset_complete": asset_complete
                                 })
                             else:
+                                versions = self._list_versions(sid, segment_id_done)
+                                fallback_path = versions[-1] if versions else ""
+                                if fallback_path:
+                                    selected_images[segment_id_done] = fallback_path
                                 asset_complete = {
                                     "type": "scenes", "id": segment_id_done,
-                                    "status": "failed",
-                                    "selected": "", "versions": [],
+                                    "status": "done" if fallback_path else "failed",
+                                    "selected": fallback_path,
+                                    "versions": versions,
                                 }
                                 if rewrite_results_map.get(segment_id_done):
                                     asset_complete["rewrite_result"] = rewrite_results_map[segment_id_done]
-                                self._report_progress("参考图", f"失败: {segment_id_done}", pct, data={
+                                message = f"完成: {segment_id_done}" if fallback_path else f"失败: {segment_id_done}"
+                                self._report_progress("参考图", message, pct, data={
                                     "asset_complete": asset_complete
                                 })
                             # 检查取消
@@ -970,14 +984,20 @@ class ReferenceGeneratorAgent(AgentInterface):
                             "asset_complete": asset_complete
                         })
                     else:
+                        versions = self._list_versions(sid, segment_id_done)
+                        fallback_path = versions[-1] if versions else ""
+                        if fallback_path:
+                            selected_images_map[segment_id_done] = fallback_path
                         asset_complete = {
                             "type": "scenes", "id": segment_id_done,
-                            "status": "failed",
-                            "selected": "", "versions": [],
+                            "status": "done" if fallback_path else "failed",
+                            "selected": fallback_path,
+                            "versions": versions,
                         }
                         if rewrite_results_map.get(segment_id_done):
                             asset_complete["rewrite_result"] = rewrite_results_map[segment_id_done]
-                        self._report_progress("参考图", f"失败: {segment_id_done}", pct, data={
+                        message = f"完成: {segment_id_done}" if fallback_path else f"失败: {segment_id_done}"
+                        self._report_progress("参考图", message, pct, data={
                             "asset_complete": asset_complete
                         })
                     

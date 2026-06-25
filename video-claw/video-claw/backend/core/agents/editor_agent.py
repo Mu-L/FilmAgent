@@ -25,11 +25,19 @@ class VideoEditorAgent(AgentInterface):
     async def process(self, input_data: Any, intervention: Optional[Dict] = None) -> Dict:
         input_data = self._merge_session_params(input_data)
         sid = input_data["session_id"]
+        regenerate_episodes = set()
+        if isinstance(intervention, dict) and isinstance(intervention.get("regenerate_episodes"), list):
+            regenerate_episodes = {
+                int(ep)
+                for ep in intervention.get("regenerate_episodes", [])
+                if str(ep).isdigit()
+            }
 
         # 从编排器注入的统一 session 快照读取阶段5数据。
         artifacts = self._session_artifacts(input_data)
         video_art = artifacts.get("video_generation", {})
         clips_list = video_art.get("clips", [])
+        post_art = artifacts.get("post_production", {})
         
         # 获取剧集标题映射 (从 Storyboard)
         storyboard_art = artifacts.get("storyboard", {})
@@ -75,6 +83,9 @@ class VideoEditorAgent(AgentInterface):
                             if not name_match:
                                 name_match = re.search(r'(\d+)', clip.get("name", ""))
                             ep_idx = int(name_match.group(1)) if name_match else 1
+
+                    if regenerate_episodes and int(ep_idx) not in regenerate_episodes:
+                        continue
                     
                     episodes_map.setdefault(int(ep_idx), []).append(path)
             else:
@@ -86,7 +97,8 @@ class VideoEditorAgent(AgentInterface):
                     path = selected_clips[shot_id]
                     if os.path.exists(path):
                         # 旧逻辑默认全部归为第1集
-                        episodes_map.setdefault(1, []).append(path)
+                        if not regenerate_episodes or 1 in regenerate_episodes:
+                            episodes_map.setdefault(1, []).append(path)
                     else:
                         logger.warning(f"[{sid}] Clip missing: {shot_id} → {path}")
 
@@ -138,6 +150,19 @@ class VideoEditorAgent(AgentInterface):
 
         loop = asyncio.get_running_loop()
         final_results = await loop.run_in_executor(None, run)
+
+        if regenerate_episodes and isinstance(post_art, dict):
+            existing_videos = post_art.get("final_videos", [])
+            if isinstance(existing_videos, list):
+                regenerated_eps = {item.get("episode") for item in final_results if isinstance(item, dict)}
+                preserved = [
+                    item for item in existing_videos
+                    if isinstance(item, dict) and item.get("episode") not in regenerated_eps
+                ]
+                final_results = sorted(
+                    preserved + final_results,
+                    key=lambda item: item.get("episode", 999) if isinstance(item, dict) else 999,
+                )
 
         self._report_progress("后期制作", "成片完成", 100)
 

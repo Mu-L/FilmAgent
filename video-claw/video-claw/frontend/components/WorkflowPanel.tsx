@@ -749,7 +749,8 @@ export default function WorkflowPanel() {
         Array.isArray(modifications.regenerate_settings)
       )) ||
       (stageId === 'reference_generation' && Array.isArray(modifications.regenerate_scenes)) ||
-      (stageId === 'video_generation' && Array.isArray(modifications.regenerate_clips));
+      (stageId === 'video_generation' && Array.isArray(modifications.regenerate_clips)) ||
+      (stageId === 'post_production' && Array.isArray(modifications.regenerate_episodes));
     
     // 构建完整的 inputData 传给后端，确保比例等参数能传递
     const inputData: Record<string, any> = {
@@ -935,7 +936,9 @@ export default function WorkflowPanel() {
         const { _editDescs, ...restSelections } = selections;
         const clips = (art.clips || []).map((c: any) => ({
           ...c,
-          selected: restSelections[c.id] || c.selected,
+          selected: Object.prototype.hasOwnProperty.call(restSelections, c.id)
+            ? restSelections[c.id]
+            : c.selected,
           description: _editDescs?.[c.id] ?? c.description,
         }));
         patch = { clips };
