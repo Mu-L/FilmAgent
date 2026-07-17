@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DEEPSEEK_TIMEOUT = 300
 DEFAULT_DEEPSEEK_MAX_ATTEMPTS = 5
-DEFAULT_DEEPSEEK_MAX_TOKENS = 20000
 
 
 class DeepSeek:
@@ -40,7 +39,6 @@ class DeepSeek:
         if proxy:
             kwargs["http_client"] = httpx.Client(proxy=proxy, timeout=self.timeout)
         self.client = OpenAI(**kwargs)
-        self.max_tokens = DEFAULT_DEEPSEEK_MAX_TOKENS
 
     @staticmethod
     def _as_int(value, default: int) -> int:
@@ -80,15 +78,15 @@ class DeepSeek:
 
         reasoning_content = getattr(message, "reasoning_content", "") if message else ""
         reasoning_chars = len(reasoning_content or "")
-        token_budget_exhausted = finish_reason == "length" or completion_tokens >= max(self.max_tokens - 8, 1)
+        token_budget_exhausted = finish_reason == "length"
         reasoning_used_output = reasoning_tokens and completion_tokens and reasoning_tokens >= completion_tokens * 0.9
 
         if token_budget_exhausted and reasoning_used_output:
             reason = "output_token_budget_exhausted_by_reasoning"
-            suggestion = "increase max_tokens, reduce prompt/output length, or use a non-reasoning/flash model"
+            suggestion = "reduce prompt/output length or use a non-reasoning/flash model"
         elif token_budget_exhausted:
             reason = "output_token_budget_exhausted"
-            suggestion = "increase max_tokens or reduce requested output length"
+            suggestion = "reduce requested output length"
         elif reasoning_content and not getattr(message, "content", None):
             reason = "reasoning_only_no_final_content"
             suggestion = "retry may succeed; consider reducing reasoning-heavy model usage for long generation"
@@ -98,7 +96,7 @@ class DeepSeek:
 
         logger.warning(
             "DeepSeek empty final content; retrying. reason=%s suggestion=%s model=%s attempt=%s/%s "
-            "finish_reason=%s max_tokens=%s prompt_tokens=%s completion_tokens=%s reasoning_tokens=%s "
+            "finish_reason=%s prompt_tokens=%s completion_tokens=%s reasoning_tokens=%s "
             "total_tokens=%s reasoning_chars=%s",
             reason,
             suggestion,
@@ -106,7 +104,6 @@ class DeepSeek:
             attempt,
             self.max_attempts,
             finish_reason,
-            self.max_tokens,
             prompt_tokens,
             completion_tokens,
             reasoning_tokens,
@@ -134,7 +131,6 @@ class DeepSeek:
                     "model": model,
                     "messages": messages,
                     "stream": False,
-                    "max_tokens": self.max_tokens
                 }
 
                 response = self.client.chat.completions.create(**request_params)

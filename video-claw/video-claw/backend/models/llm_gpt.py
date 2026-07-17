@@ -39,7 +39,6 @@ class GPT:
             
         self.client = OpenAI(**kwargs)
         self.max_attempts = 10
-        self.max_tokens = 8000
 
     def query(self, prompt, image_urls=[], model="", web_search=False):
         self.model = model
@@ -69,7 +68,6 @@ class GPT:
                 request_params = {
                     "model": self.model,
                     "messages": messages,
-                    "max_tokens": self.max_tokens
                 }
                 # Add search tool if web_search is enabled
                 if web_search:

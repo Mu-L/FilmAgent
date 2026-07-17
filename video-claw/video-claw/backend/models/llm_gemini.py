@@ -51,7 +51,6 @@ class Gemini:
             kwargs["http_client"] = httpx.Client(proxy=proxy)
         self.client = OpenAI(**kwargs)
         self.max_attempts = 10
-        self.max_tokens = 8000
 
     def query(self, prompt: str, image_urls: List[str] = [], model: str = "gemini-2.5-flash") -> str:
         """
@@ -85,7 +84,6 @@ class Gemini:
                 response = self.client.chat.completions.create(
                     model=model,
                     messages=messages,
-                    max_tokens=self.max_tokens,
                     temperature=0.7
                 )
 

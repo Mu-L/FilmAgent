@@ -50,7 +50,6 @@ class GeminiVLClient:
             kwargs["http_client"] = httpx.Client(proxy=proxy)
         self.client = OpenAI(**kwargs)
         self.max_attempts = 10
-        self.max_tokens = 8000
 
     def _encode_image(self, image_path: str) -> str:
         """将本地图片编码为 base64"""
@@ -117,7 +116,6 @@ class GeminiVLClient:
                 response = self.client.chat.completions.create(
                     model=model,
                     messages=messages,
-                    max_tokens=self.max_tokens,
                     temperature=parameters.get("temperature", 0.7) if parameters else 0.7
                 )
 

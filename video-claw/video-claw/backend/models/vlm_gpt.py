@@ -58,7 +58,6 @@ class GPTVLClient:
             kwargs["base_url"] = self.base_url
         self.client = OpenAI(**kwargs)
         self.max_attempts = 5
-        self.max_tokens = 4096
 
     def _encode_image(self, image_path: str) -> str:
         """将本地图片编码为 base64"""
@@ -127,7 +126,6 @@ class GPTVLClient:
                 response = self.client.chat.completions.create(
                     model=model,
                     messages=messages,
-                    max_tokens=self.max_tokens,
                     temperature=parameters.get("temperature", 0.7) if parameters else 0.7
                 )
 
